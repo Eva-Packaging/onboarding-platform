@@ -1,21 +1,21 @@
 # Normalized Database Schema
 
-This schema models a GitHub-centered onboarding and access provisioning system for an education platform. It supports internal user registration, GitHub and Atlassian identity tracking, onboarding workflows, GitHub team assignment, Jira group provisioning, retryable async processing, and audit history.[cite:12][cite:78][cite:61]
+This schema models a GitHub-centered onboarding and access provisioning system for an education platform. It supports internal user registration, GitHub and Atlassian identity tracking, onboarding workflows, GitHub team assignment, Jira group provisioning, retryable async processing, and audit history.
 
 ## Design goals
 
-The schema is normalized around distinct business concepts so identity data, onboarding state, provider configuration, and audit history do not get duplicated across tables. This is important because GitHub team membership can remain pending until an invitation is accepted, Atlassian provisioning is group-oriented through SCIM-based administration, and GitHub-to-Jira attribution may depend on matching user identity data such as email.[cite:12][cite:78][cite:61]
+The schema is normalized around distinct business concepts so identity data, onboarding state, provider configuration, and audit history do not get duplicated across tables. This is important because GitHub team membership can remain pending until an invitation is accepted, Atlassian provisioning is group-oriented through SCIM-based administration, and GitHub-to-Jira attribution may depend on matching user identity data such as email.
 
 ## Relationship overview
 
-- One `user_profile` has one or many external identities over time.[cite:78]
-- One `user_profile` can have many onboarding requests.[cite:12]
-- One `onboarding_request` has many onboarding steps.[cite:12]
-- One `onboarding_step` has many provisioning audit log entries.[cite:12]
-- One `external_provider` has many `provider_target` rows.[cite:78]
-- One `provider_target` can be referenced by many onboarding steps.[cite:12][cite:78]
-- One `user_profile` can be linked to zero or one active Atlassian identity for Jira correlation in the initial model.[cite:61][cite:78]
-- One `user_profile` can map to many role assignments over time, while one role can map to many users, so role membership is modeled as a many-to-many bridge.[cite:78]
+- One `user_profile` has one or many external identities over time.
+- One `user_profile` can have many onboarding requests.
+- One `onboarding_request` has many onboarding steps.
+- One `onboarding_step` has many provisioning audit log entries.
+- One `external_provider` has many `provider_target` rows.
+- One `provider_target` can be referenced by many onboarding steps.
+- One `user_profile` can be linked to zero or one active Atlassian identity for Jira correlation in the initial model.
+- One `user_profile` can map to many role assignments over time, while one role can map to many users, so role membership is modeled as a many-to-many bridge.
 
 ## Tables
 
@@ -344,20 +344,20 @@ create table onboarding_step (
 
 ### 1. GitHub-first registration
 
-`user_profile` stores the internal user, while `external_identity` stores the GitHub identity without coupling application data to provider-specific fields. This supports GitHub-first onboarding while keeping room for future providers.[cite:12]
+`user_profile` stores the internal user, while `external_identity` stores the GitHub identity without coupling application data to provider-specific fields. This supports GitHub-first onboarding while keeping room for future providers.
 
 ### 2. Jira identity correlation
 
-`identity_link` explicitly tracks the relationship between GitHub and Atlassian identities. That supports the requirement to improve Jira attribution for GitHub users when matching identity data is needed.[cite:61]
+`identity_link` explicitly tracks the relationship between GitHub and Atlassian identities. That supports the requirement to improve Jira attribution for GitHub users when matching identity data is needed.
 
 ### 3. Role-based provisioning
 
-`app_role`, `user_role_assignment`, `provider_target`, and `group_mapping_rule` let the system map business roles such as student or instructor to GitHub teams and Jira groups without hard-coding those rules into user rows. This keeps the design normalized and extensible.[cite:78]
+`app_role`, `user_role_assignment`, `provider_target`, and `group_mapping_rule` let the system map business roles such as student or instructor to GitHub teams and Jira groups without hard-coding those rules into user rows. This keeps the design normalized and extensible.
 
 ### 4. Async onboarding and retries
 
-`onboarding_request`, `onboarding_step`, `provisioning_audit_log`, and `outbox_event` together support long-running workflows, Kafka publishing, external retries, and support visibility. This is important because GitHub memberships may remain pending and Atlassian provisioning may complete separately from the initial registration request.[cite:12][cite:78]
+`onboarding_request`, `onboarding_step`, `provisioning_audit_log`, and `outbox_event` together support long-running workflows, Kafka publishing, external retries, and support visibility. This is important because GitHub memberships may remain pending and Atlassian provisioning may complete separately from the initial registration request.
 
 ### 5. Support and troubleshooting
 
-`provisioning_audit_log` preserves each external call and result, so admins can inspect failures, retries, and pending states. That is especially useful when a GitHub invitation is not yet accepted or a Jira account cannot be matched.[cite:12][cite:61]
+`provisioning_audit_log` preserves each external call and result, so admins can inspect failures, retries, and pending states. That is especially useful when a GitHub invitation is not yet accepted or a Jira account cannot be matched.

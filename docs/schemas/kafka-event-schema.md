@@ -1,13 +1,13 @@
 # Kafka Event Schema
 
-This document defines the initial Kafka event contracts for the education platform onboarding system using Avro serialization and Schema Registry. The event model supports GitHub-first registration, identity correlation with Atlassian, GitHub team provisioning, Jira group provisioning, and completion tracking across asynchronous services.[cite:12][cite:78][cite:61]
+This document defines the initial Kafka event contracts for the education platform onboarding system using Avro serialization and Schema Registry. The event model supports GitHub-first registration, identity correlation with Atlassian, GitHub team provisioning, Jira group provisioning, and completion tracking across asynchronous services.
 
 ## Assumptions
 
-- Events are serialized as Avro and registered in Schema Registry.[cite:114][cite:120]
-- Schema evolution is managed through subject compatibility rules, which Schema Registry supports centrally for Avro subjects.[cite:113][cite:114]
-- Topics carry domain events rather than mixing unrelated payload types in the same topic when avoidable, which aligns with common Schema Registry best practice for governance and compatibility management.[cite:115][cite:118]
-- Event payloads include enough identifiers to correlate records across services and database tables, especially onboarding requests, steps, and users.[cite:12]
+- Events are serialized as Avro and registered in Schema Registry.
+- Schema evolution is managed through subject compatibility rules, which Schema Registry supports centrally for Avro subjects.
+- Topics carry domain events rather than mixing unrelated payload types in the same topic when avoidable, which aligns with common Schema Registry best practice for governance and compatibility management.
+- Event payloads include enough identifiers to correlate records across services and database tables, especially onboarding requests, steps, and users.
 
 ## Naming conventions
 
@@ -25,7 +25,7 @@ edu.onboarding.lifecycle.v1
 
 ### Subject naming
 
-Use TopicRecordNameStrategy or RecordNameStrategy so Avro record evolution stays manageable as multiple event types grow. Schema Registry supports centralized schema registration and compatibility checks for Avro subjects, so the naming strategy should be standardized early.[cite:113][cite:114][cite:115]
+Use TopicRecordNameStrategy or RecordNameStrategy so Avro record evolution stays manageable as multiple event types grow. Schema Registry supports centralized schema registration and compatibility checks for Avro subjects, so the naming strategy should be standardized early.
 
 Recommended subject examples:
 
@@ -52,7 +52,7 @@ Examples:
 
 ## Common envelope pattern
 
-Each event should carry a common metadata envelope so consumers can trace, deduplicate, and debug messages consistently. Schema Registry supports schema reuse and compatibility management, but the business payload still needs stable cross-service metadata design.[cite:114][cite:115]
+Each event should carry a common metadata envelope so consumers can trace, deduplicate, and debug messages consistently. Schema Registry supports schema reuse and compatibility management, but the business payload still needs stable cross-service metadata design.
 
 Common fields for every event:
 
@@ -82,7 +82,7 @@ Recommended metadata rules:
 | `edu.provisioning.atlassian.v1` | Atlassian/Jira group provisioning lifecycle | `AtlassianProvisioningRequestedV1`, `AtlassianProvisioningCompletedV1` |
 | `edu.onboarding.lifecycle.v1` | Final onboarding outcomes | `OnboardingCompletedV1`, `OnboardingFailedV1` |
 
-This split matches the asynchronous boundaries in the system design: GitHub membership may remain pending until invitation acceptance, Atlassian provisioning may progress independently, and identity correlation is its own business step because Jira-linked developer attribution depends on that match.[cite:12][cite:78][cite:61]
+This split matches the asynchronous boundaries in the system design: GitHub membership may remain pending until invitation acceptance, Atlassian provisioning may progress independently, and identity correlation is its own business step because Jira-linked developer attribution depends on that match.
 
 ## Avro schemas
 
@@ -223,7 +223,7 @@ This split matches the asynchronous boundaries in the system design: GitHub memb
 }
 ```
 
-This event supports GitHub team-assignment work, which is important because GitHub team membership calls may complete immediately or remain pending until a user accepts an invitation.[cite:12]
+This event supports GitHub team-assignment work, which is important because GitHub team membership calls may complete immediately or remain pending until a user accepts an invitation.
 
 ### 6. `GithubProvisioningCompletedV1`
 
@@ -252,7 +252,7 @@ This event supports GitHub team-assignment work, which is important because GitH
 }
 ```
 
-Expected `membershipState` values may include `ACTIVE`, `PENDING`, or `FAILED`, reflecting the GitHub membership lifecycle.[cite:12]
+Expected `membershipState` values may include `ACTIVE`, `PENDING`, or `FAILED`, reflecting the GitHub membership lifecycle.
 
 ### 7. `AtlassianProvisioningRequestedV1`
 
@@ -280,7 +280,7 @@ Expected `membershipState` values may include `ACTIVE`, `PENDING`, or `FAILED`, 
 }
 ```
 
-This event models Atlassian group provisioning, which fits Atlassian's documented provisioning and SCIM-oriented user-management approach.[cite:78][cite:82]
+This event models Atlassian group provisioning, which fits Atlassian's documented provisioning and SCIM-oriented user-management approach.
 
 ### 8. `AtlassianProvisioningCompletedV1`
 
@@ -373,11 +373,11 @@ This event models Atlassian group provisioning, which fits Atlassian's documente
 
 ## Compatibility and evolution rules
 
-Schema Registry supports Avro compatibility validation and schema version management, so compatibility should be enforced per subject from the start.[cite:113][cite:114]
+Schema Registry supports Avro compatibility validation and schema version management, so compatibility should be enforced per subject from the start.
 
 Recommended rules:
-- Use `BACKWARD` compatibility for event subjects so newer consumers can read older data while producers evolve safely.[cite:113]
-- Add optional fields with defaults rather than removing or renaming fields abruptly, because Avro evolution works best when changes are additive and planned.[cite:113][cite:124]
+- Use `BACKWARD` compatibility for event subjects so newer consumers can read older data while producers evolve safely.
+- Add optional fields with defaults rather than removing or renaming fields abruptly, because Avro evolution works best when changes are additive and planned.
 - Do not reuse a field name for a different meaning.
 - Treat event record names as immutable contracts once published.
 - Introduce `V2` record names only when a breaking contract change is unavoidable.
@@ -394,12 +394,12 @@ Examples of unsafe evolution:
 
 ### Why identity correlation is its own event family
 
-GitHub-to-Jira attribution is not guaranteed by basic registration alone. Since visibility issues can arise when Jira cannot correctly associate a GitHub user, correlation should be treated as a first-class asynchronous step with its own success and failure events.[cite:61]
+GitHub-to-Jira attribution is not guaranteed by basic registration alone. Since visibility issues can arise when Jira cannot correctly associate a GitHub user, correlation should be treated as a first-class asynchronous step with its own success and failure events.
 
 ### Why GitHub and Atlassian provisioning are separate topics
 
-GitHub team membership and Atlassian group provisioning have different operational semantics and failure modes. GitHub membership can remain pending due to invitation acceptance, while Atlassian provisioning aligns more closely with managed user/group administration patterns.[cite:12][cite:78][cite:82]
+GitHub team membership and Atlassian group provisioning have different operational semantics and failure modes. GitHub membership can remain pending due to invitation acceptance, while Atlassian provisioning aligns more closely with managed user/group administration patterns.
 
 ### Why event metadata is repeated
 
-Stable event-level metadata simplifies observability, replay analysis, dead-letter handling, and database correlation across services. Schema Registry manages schema governance, but traceability still depends on the payload design chosen by the platform.[cite:114][cite:115]
+Stable event-level metadata simplifies observability, replay analysis, dead-letter handling, and database correlation across services. Schema Registry manages schema governance, but traceability still depends on the payload design chosen by the platform.
