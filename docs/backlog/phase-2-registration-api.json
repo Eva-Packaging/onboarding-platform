@@ -1,0 +1,315 @@
+{
+  "summary": "Phase 2: Registration API",
+  "description": "Implement the two user-facing endpoints required for GitHub-first registration and profile retrieval: POST /api/v1/registrations and GET /api/v1/me. The registration endpoint lives in user-service and is responsible for upserting user_profile, creating the GitHub external_identity snapshot, assigning initial roles, generating a correlation ID, writing a UserRegisteredV1 outbox event, and synchronously calling onboarding-service to create the onboarding_request with its initial steps. The GET /api/v1/me endpoint returns the internal user profile with optional linked identities and active onboarding summary. All request and response shapes must match docs/rest-api-reference.md exactly. All error responses must use the standard error envelope. Exit criteria: a GitHub-authenticated frontend can POST a registration and receive a 201 with userId, onboardingRequestId, correlationId, and steps[]; API responses match the spec; validation and error envelopes are consistent.",
+  "labels": ["phase-2", "registration", "rest-api", "user-service", "onboarding-service"],
+  "priority": "High",
+  "userType": "new user",
+  "functionality": "register after completing GitHub OAuth in the frontend and immediately receive an onboarding request ID and step status to track provisioning progress",
+  "benefit": "the frontend can start a user session, submit identity data once, and begin polling onboarding state without any manual backend intervention",
+  "stories": [
+    {
+      "summary": "Registration DTO, Bean Validation, and global error envelope",
+      "description": "Define the RegistrationRequest and RegistrationResponse DTOs in <backend/user-service/> and wire a global exception handler that converts validation failures and domain exceptions into the standard error envelope defined in <docs/rest-api-reference.md>. The error envelope has four fields: code, message, correlationId, and details. This handler must be in place before the controller is wired so all error paths are consistently formatted from the start.",
+      "labels": ["user-service", "dto", "validation", "error-handling"],
+      "priority": "High",
+      "storyPoints": 3,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Missing required field returns 400 with error envelope",
+          "given": "a POST /api/v1/registrations request body that omits the required githubUserId field",
+          "when": "the request is submitted",
+          "then": "the response is HTTP 400 with a JSON body containing code, message, correlationId, and details fields matching the error envelope schema"
+        },
+        {
+          "scenario": "RegistrationResponse serialises all required fields",
+          "given": "a valid registration has been processed",
+          "when": "the 201 response body is inspected",
+          "then": "userId, onboardingRequestId, status, correlationId, and steps[] are all present with correct types"
+        },
+        {
+          "scenario": "Unhandled exception returns 500 error envelope",
+          "given": "the registration service throws an unexpected RuntimeException",
+          "when": "the request is processed",
+          "then": "the response is HTTP 500 with the standard error envelope and no stack trace in the body"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create RegistrationRequest DTO with validation annotations",
+          "description": "Add xyz.catuns.onboarding.user.api.dto.RegistrationRequest with fields githubUserId (@NotBlank), githubLogin (@NotBlank), primaryEmail (@Email, nullable), displayName (@NotBlank), avatarUrl (nullable), and roleKeys (List<String>, nullable). Annotate the class with @Valid for Spring MVC binding."
+        },
+        {
+          "summary": "Create RegistrationResponse DTO",
+          "description": "Add xyz.catuns.onboarding.user.api.dto.RegistrationResponse with fields userId (UUID), onboardingRequestId (UUID), status (String), correlationId (UUID), and steps (List<StepSummaryDto>). Add StepSummaryDto with type and state fields."
+        },
+        {
+          "summary": "Create ErrorResponse DTO",
+          "description": "Add xyz.catuns.onboarding.user.api.dto.ErrorResponse with fields code (String), message (String), correlationId (UUID), and details (Map<String, Object>). This DTO is used by all error handlers across user-service."
+        },
+        {
+          "summary": "Implement GlobalExceptionHandler with @RestControllerAdvice",
+          "description": "Add xyz.catuns.onboarding.user.api.GlobalExceptionHandler handling: MethodArgumentNotValidException -> 400, ConstraintViolationException -> 400, DuplicateRegistrationException -> 409, NoSuchElementException -> 404, and all unhandled Throwable -> 500. Each handler builds an ErrorResponse. Extract correlationId from MDC when available."
+        },
+        {
+          "summary": "Write unit tests for GlobalExceptionHandler",
+          "description": "Add MockMvc-based tests verifying that each exception type produces the correct HTTP status and that the response body matches the error envelope shape. Test at least: missing field -> 400, duplicate registration -> 409, unhandled exception -> 500."
+        }
+      ]
+    },
+    {
+      "summary": "UserRegistrationService — user profile upsert and GitHub identity snapshot",
+      "description": "Implement the core registration domain logic in <backend/user-service/>. The service must: look up an existing user_profile by githubUserId via external_identity (upsert semantics — re-registration of an active user raises DuplicateRegistrationException); create user_profile if new; create or update external_identity with the GitHub snapshot fields (githubUserId, githubLogin, primaryEmail, displayName, avatarUrl, profile_json); assign AppRole records from the provided roleKeys, resolving them from the app_role table; generate a UUID correlation ID; and write an unpublished UserRegisteredV1 outbox_event row in the same transaction. The Kafka relay is out of scope for Phase 2 and will be added in Phase 4.",
+      "labels": ["user-service", "domain-service", "registration", "upsert", "outbox"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "New user registration creates profile and identity",
+          "given": "no user_profile exists for the provided githubUserId",
+          "when": "UserRegistrationService.register() is called",
+          "then": "a new user_profile row and an external_identity row with is_primary=true are persisted in the same transaction"
+        },
+        {
+          "scenario": "Duplicate registration raises DuplicateRegistrationException",
+          "given": "a user_profile with status ACTIVE already exists for the provided githubUserId",
+          "when": "UserRegistrationService.register() is called again for the same githubUserId",
+          "then": "DuplicateRegistrationException is thrown and no new rows are created"
+        },
+        {
+          "scenario": "Roles are resolved and assigned from roleKeys",
+          "given": "the request includes roleKeys [\"STUDENT\"]",
+          "when": "the registration is persisted",
+          "then": "a user_role_assignment row linking the user_profile to the STUDENT AppRole is created"
+        },
+        {
+          "scenario": "Outbox event is written in the same transaction",
+          "given": "a registration succeeds",
+          "when": "the transaction commits",
+          "then": "an outbox_event row with event_type UserRegisteredV1 and published=false exists in the same database"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Implement UserRegistrationService",
+          "description": "Create @Service xyz.catuns.onboarding.user.service.UserRegistrationService with a @Transactional register(RegistrationRequest) method. Resolve existing identity via ExternalIdentityRepository.findByProviderKeyAndExternalUserId. Throw DuplicateRegistrationException if user_profile.status is ACTIVE. Otherwise create UserProfile (status=PENDING_ONBOARDING), ExternalIdentity, UserRoleAssignment rows, and an OutboxEvent."
+        },
+        {
+          "summary": "Create DuplicateRegistrationException",
+          "description": "Add xyz.catuns.onboarding.user.service.DuplicateRegistrationException as an unchecked exception with a field for the conflicting githubUserId. This is mapped to HTTP 409 by the GlobalExceptionHandler."
+        },
+        {
+          "summary": "Build UserRegisteredV1 outbox payload",
+          "description": "Add a UserRegisteredV1PayloadBuilder that constructs the JSON payload for the outbox_event row. Fields: userId, githubUserId, githubLogin, primaryEmail, correlationId, roleKeys, registeredAt. Serialize to a JSON string for the outbox_event.payload column."
+        },
+        {
+          "summary": "Write @DataJpaTest integration tests for UserRegistrationService",
+          "description": "Add integration tests using Testcontainers verifying: new user creates profile + identity + outbox row; duplicate active user raises exception; roles are assigned from roleKeys; correlation ID is non-null on every registration."
+        }
+      ]
+    },
+    {
+      "summary": "POST /api/v1/registrations controller and synchronous onboarding-service call",
+      "description": "Implement the RegistrationController in <backend/user-service/> that handles POST /api/v1/registrations. After UserRegistrationService persists the user, the controller must synchronously call an internal onboarding-service endpoint to create the onboarding_request and initial steps, then compose the HTTP 201 response from both results. Use Spring's RestClient (or WebClient) configured with the onboarding-service base URL from application properties. If the onboarding-service call fails, return HTTP 503 per the error handling defined in <docs/rest-api-reference.md>. The correlation ID generated during user creation must be forwarded as an X-Correlation-ID request header on the internal call.",
+      "labels": ["user-service", "controller", "rest-api", "registration"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Successful registration returns HTTP 201",
+          "given": "a valid RegistrationRequest for a new GitHub user",
+          "when": "POST /api/v1/registrations is called",
+          "then": "the response is HTTP 201 with userId, onboardingRequestId, status IN_PROGRESS, correlationId, and a steps[] array containing IDENTITY_CORRELATION, GITHUB_TEAM_PROVISIONING, and JIRA_GROUP_PROVISIONING each with state PENDING"
+        },
+        {
+          "scenario": "Duplicate registration returns HTTP 409",
+          "given": "a user_profile is already ACTIVE for the provided githubUserId",
+          "when": "POST /api/v1/registrations is called again",
+          "then": "the response is HTTP 409 with the standard error envelope"
+        },
+        {
+          "scenario": "Onboarding-service unavailability returns HTTP 503",
+          "given": "the onboarding-service internal endpoint is unreachable",
+          "when": "POST /api/v1/registrations is called with a valid payload",
+          "then": "the response is HTTP 503 with the standard error envelope and the user-service transaction has already committed the user_profile and outbox_event"
+        },
+        {
+          "scenario": "Correlation ID appears in the response",
+          "given": "a successful registration",
+          "when": "the 201 response body is read",
+          "then": "the correlationId field is a non-null UUID matching the value forwarded to onboarding-service"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Implement RegistrationController",
+          "description": "Add @RestController xyz.catuns.onboarding.user.api.RegistrationController with @PostMapping(\"/api/v1/registrations\"). Call UserRegistrationService then OnboardingServiceClient. Map the results to RegistrationResponse and return ResponseEntity.status(201).body(response)."
+        },
+        {
+          "summary": "Implement OnboardingServiceClient",
+          "description": "Add xyz.catuns.onboarding.user.client.OnboardingServiceClient using Spring RestClient. Expose a createOnboardingRequest(UUID userId, UUID correlationId, List<String> roleKeys) method that POSTs to the onboarding-service internal endpoint and returns an OnboardingInitResponse. Wrap connectivity errors in OnboardingServiceUnavailableException mapped to 503."
+        },
+        {
+          "summary": "Configure onboarding-service base URL in application properties",
+          "description": "Add onboarding-service.base-url property to application.yaml and application-local.yaml. Wire it into OnboardingServiceClient via @Value or AppProperties. Add the property to frontend/apps/web/.env.example equivalent for local dev."
+        },
+        {
+          "summary": "Add X-Correlation-ID header propagation to RestClient",
+          "description": "Configure the RestClient bean to attach the current correlation ID as X-Correlation-ID on all outbound calls to onboarding-service. Read the correlation ID from MDC so it is always available within a request context."
+        },
+        {
+          "summary": "Write MockMvc integration tests for RegistrationController",
+          "description": "Add @SpringBootTest slice tests for RegistrationController mocking OnboardingServiceClient. Cover: valid request -> 201 with correct body; missing githubUserId -> 400; duplicate active user -> 409; client throws connectivity error -> 503."
+        }
+      ]
+    },
+    {
+      "summary": "Onboarding request initialisation — internal endpoint in onboarding-service",
+      "description": "Implement an internal REST endpoint in <backend/onboarding-service/> that user-service calls synchronously after creating the user profile. The endpoint receives userId, correlationId, and roleKeys, creates an onboarding_request with state REQUESTED, transitions it to IN_PROGRESS, and creates three OnboardingStep rows (IDENTITY_CORRELATION, GITHUB_TEAM_PROVISIONING, JIRA_GROUP_PROVISIONING) each with state PENDING. Provider target resolution against group_mapping_rule is deferred to Phase 3; for Phase 2 the step rows are created with provider_target_id = null. The endpoint returns the new requestId and the step list. The endpoint path is /api/v1/internal/onboarding-requests and must not be exposed to the public API gateway.",
+      "labels": ["onboarding-service", "controller", "onboarding-request", "internal-api"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Valid internal call creates request and steps",
+          "given": "a POST to /api/v1/internal/onboarding-requests with a valid userId and correlationId",
+          "when": "the endpoint is called",
+          "then": "an onboarding_request with state IN_PROGRESS and three OnboardingStep rows with state PENDING are persisted and the response body contains the requestId and steps[]"
+        },
+        {
+          "scenario": "Returned steps list has all three step types",
+          "given": "a successful internal call",
+          "when": "the response steps[] is inspected",
+          "then": "it contains exactly IDENTITY_CORRELATION, GITHUB_TEAM_PROVISIONING, and JIRA_GROUP_PROVISIONING"
+        },
+        {
+          "scenario": "Missing userId returns 400",
+          "given": "a POST to /api/v1/internal/onboarding-requests with no userId",
+          "when": "the request is processed",
+          "then": "the response is HTTP 400 with the standard error envelope"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create OnboardingInitRequest and OnboardingInitResponse DTOs",
+          "description": "Add xyz.catuns.onboarding.service.api.dto.OnboardingInitRequest (userId UUID @NotNull, correlationId UUID @NotNull, roleKeys List<String>) and OnboardingInitResponse (requestId UUID, state String, steps List<StepSummaryDto>)."
+        },
+        {
+          "summary": "Implement OnboardingInitialisationService",
+          "description": "Add @Service xyz.catuns.onboarding.service.service.OnboardingInitialisationService with a @Transactional initialise(OnboardingInitRequest) method. Create OnboardingRequest (state=IN_PROGRESS, source=SELF_REGISTRATION, correlation_id from request). Create three OnboardingStep rows by resolving step_type_id from OnboardingStepType for IDENTITY_CORRELATION, GITHUB_TEAM_PROVISIONING, and JIRA_GROUP_PROVISIONING. Use OnboardingDomainService for state transitions."
+        },
+        {
+          "summary": "Implement OnboardingInternalController",
+          "description": "Add @RestController xyz.catuns.onboarding.service.api.OnboardingInternalController with @PostMapping(\"/api/v1/internal/onboarding-requests\"). Call OnboardingInitialisationService and return HTTP 201 with OnboardingInitResponse."
+        },
+        {
+          "summary": "Write integration tests for OnboardingInitialisationService",
+          "description": "Add @DataJpaTest or @SpringBootTest slice tests using Testcontainers verifying that a valid call creates exactly one OnboardingRequest and three OnboardingStep rows with correct step types and PENDING state."
+        }
+      ]
+    },
+    {
+      "summary": "GET /api/v1/me — current user profile with optional includes",
+      "description": "Implement the GET /api/v1/me endpoint in <backend/user-service/>. The endpoint resolves the authenticated user from the bearer token by extracting the githubUserId claim, looks up the corresponding user_profile, and returns the profile response. When the query parameter include=identities is present, the response includes the github and atlassian identity blocks. When include=onboarding is present, the service calls onboarding-service to fetch the latest onboarding_request summary. Both includes can be requested together. The response shape must match the example in <docs/rest-api-reference.md> section 2 exactly. Return 401 when the token is missing and 404 when no user_profile exists for the resolved githubUserId.",
+      "labels": ["user-service", "controller", "profile", "rest-api"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Authenticated user receives their profile",
+          "given": "a valid bearer token containing a githubUserId claim that maps to an existing user_profile",
+          "when": "GET /api/v1/me is called",
+          "then": "the response is HTTP 200 with userId, displayName, primaryEmail, status, and roles[] populated correctly"
+        },
+        {
+          "scenario": "include=identities adds GitHub identity block",
+          "given": "a valid bearer token and an ExternalIdentity row for GITHUB exists for the user",
+          "when": "GET /api/v1/me?include=identities is called",
+          "then": "the response includes a github object with userId, login, and email fields"
+        },
+        {
+          "scenario": "include=onboarding adds onboarding summary block",
+          "given": "a valid bearer token and an active onboarding request exists for the user",
+          "when": "GET /api/v1/me?include=onboarding is called",
+          "then": "the response includes an onboarding object with requestId and state fields"
+        },
+        {
+          "scenario": "Unknown user returns 404",
+          "given": "a valid bearer token whose githubUserId does not match any user_profile",
+          "when": "GET /api/v1/me is called",
+          "then": "the response is HTTP 404 with the standard error envelope"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Implement JWT principal extraction",
+          "description": "Add xyz.catuns.onboarding.user.security.JwtPrincipalExtractor that reads the githubUserId claim from the Spring Security Authentication principal. Wire it into UserProfileController to resolve the current user on each request."
+        },
+        {
+          "summary": "Create MeResponse DTO hierarchy",
+          "description": "Add MeResponse with userId, displayName, primaryEmail, status, roles, github (GitHubIdentitySummary), atlassian (AtlassianIdentitySummary), and onboarding (OnboardingSummary) fields. Make github, atlassian, and onboarding nullable to support partial includes."
+        },
+        {
+          "summary": "Implement UserProfileController with GET /api/v1/me",
+          "description": "Add @RestController xyz.catuns.onboarding.user.api.UserProfileController with @GetMapping(\"/api/v1/me\"). Parse the include query param as a Set<String>. Call UserProfileService to load the profile and conditionally fetch identity or onboarding data based on the include set."
+        },
+        {
+          "summary": "Implement UserProfileService with include resolution",
+          "description": "Add @Service xyz.catuns.onboarding.user.service.UserProfileService with a getMe(UUID githubUserId, Set<String> includes) method. Load UserProfile via ExternalIdentityRepository. When identities is in includes, load ExternalIdentity rows. When onboarding is in includes, call OnboardingServiceClient to fetch the latest OnboardingRequest summary."
+        },
+        {
+          "summary": "Extend OnboardingServiceClient with getLatestOnboarding",
+          "description": "Add getLatestOnboardingForUser(UUID userId) to OnboardingServiceClient. The onboarding-service must expose a corresponding GET /api/v1/internal/onboarding-requests/latest?userId= endpoint returning the most recent request state and requestId. Implement that endpoint in onboarding-service."
+        },
+        {
+          "summary": "Write MockMvc tests for GET /api/v1/me",
+          "description": "Add tests covering: base profile without includes; profile with include=identities when GitHub identity exists; profile with include=onboarding; unknown user -> 404; missing token -> 401."
+        }
+      ]
+    },
+    {
+      "summary": "Correlation ID propagation and MDC request tracing",
+      "description": "Wire correlation ID generation, propagation, and MDC logging across user-service and onboarding-service. A new UUID correlation ID is generated by user-service at registration and stored on both the outbox_event and the onboarding_request. The ID must be forwarded on all internal HTTP calls via the X-Correlation-ID request header. A servlet filter in each service must extract X-Correlation-ID from inbound requests and store it in MDC under the key correlationId so that all log lines within a request include it. This applies to all /api/v1 endpoints, not just registration.",
+      "labels": ["user-service", "onboarding-service", "observability", "tracing", "mdc"],
+      "priority": "Medium",
+      "storyPoints": 3,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Registration response includes correlationId",
+          "given": "a successful POST /api/v1/registrations",
+          "when": "the 201 response body is read",
+          "then": "correlationId is a non-null UUID"
+        },
+        {
+          "scenario": "Inbound X-Correlation-ID is stored in MDC",
+          "given": "an HTTP request arrives at user-service with header X-Correlation-ID: <uuid>",
+          "when": "any log line is emitted during request processing",
+          "then": "the MDC value for correlationId matches the header value"
+        },
+        {
+          "scenario": "MDC is cleared after request completes",
+          "given": "a request has been processed and the servlet filter has run its finally block",
+          "when": "MDC is inspected after the response is sent",
+          "then": "the correlationId key is absent from MDC"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add CorrelationIdFilter to user-service",
+          "description": "Add xyz.catuns.onboarding.user.filter.CorrelationIdFilter implementing OncePerRequestFilter. In doFilterInternal: read X-Correlation-ID header (or generate a new UUID if absent), store in MDC under correlationId, call the filter chain, then remove from MDC in a finally block. Register as a @Bean with highest precedence."
+        },
+        {
+          "summary": "Add CorrelationIdFilter to onboarding-service",
+          "description": "Add the equivalent CorrelationIdFilter in xyz.catuns.onboarding.service.filter using the same logic. Ensures that internal calls from user-service propagate the correlation ID into onboarding-service logs."
+        },
+        {
+          "summary": "Include correlationId in log pattern",
+          "description": "Update logback configuration in each service to include %X{correlationId} in the log pattern so correlation IDs appear on every structured log line without manual interpolation in application code."
+        },
+        {
+          "summary": "Write filter integration tests",
+          "description": "Add MockMvc tests in user-service verifying: inbound X-Correlation-ID is echoed in the response header; a request without X-Correlation-ID generates a new UUID and includes it in the response; MDC is cleared between requests."
+        }
+      ]
+    }
+  ]
+}

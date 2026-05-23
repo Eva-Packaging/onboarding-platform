@@ -1,0 +1,347 @@
+{
+  "summary": "Phase 1: Domain and Persistence",
+  "description": "Implement the full JPA entity model, Flyway database migrations, Spring Data JPA repository layer, seed data, and onboarding state transition domain service across all three Spring Boot services. The schema source of truth is docs/schemas/normalized-database-schema.md. All entities must match that schema exactly. Each service owns its own database: user-service owns user_profile, external_provider, external_identity, identity_link, app_role, user_role_assignment, and outbox_event; onboarding-service owns onboarding_request, onboarding_step_type, onboarding_step, and outbox_event; provisioning-service owns provider_target, group_mapping_rule, provisioning_audit_log, and outbox_event. Exit criteria: database schema matches documentation, CRUD and lookup operations pass tests, and onboarding request and step entities are persisted consistently.",
+  "labels": ["phase-1", "domain", "persistence", "jpa", "flyway", "spring-boot"],
+  "priority": "High",
+  "userType": "operations engineer",
+  "functionality": "stand up a validated domain model and persistence layer so that subsequent API and event phases have a stable data foundation to build on",
+  "benefit": "every higher-level feature (registration API, Kafka events, provisioning) can be built and tested against a correct, migration-managed schema with no manual database setup",
+  "stories": [
+    {
+      "summary": "JPA entities and Flyway migrations for user-service domain",
+      "description": "Implement JPA entities and Flyway migration scripts in <backend/user-service/> for all tables owned by the user-service database. Tables in scope: user_profile, external_provider, external_identity, identity_link, app_role, user_role_assignment, and outbox_event. Entity classes go under the package xyz.catuns.onboarding.user.domain. Flyway scripts go under <src/main/resources/db/migration/>. Column types, constraints, and relationships must exactly match <docs/schemas/normalized-database-schema.md>. All UUID primary keys must use a generation strategy compatible with PostgreSQL. Bidirectional JPA associations must be mapped correctly to avoid N+1 issues.",
+      "labels": ["user-service", "jpa", "flyway", "persistence", "domain"],
+      "priority": "High",
+      "storyPoints": 8,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Flyway migrations apply cleanly on first start",
+          "given": "a fresh user_service database is available",
+          "when": "the user-service application starts",
+          "then": "Flyway applies all migration scripts without errors and all tables exist with the correct columns and constraints"
+        },
+        {
+          "scenario": "UserProfile entity persists and loads correctly",
+          "given": "the user-service is running with a connected database",
+          "when": "a UserProfile entity is saved via the JPA entity manager or repository",
+          "then": "it can be retrieved by ID with all fields intact including created_at and updated_at"
+        },
+        {
+          "scenario": "ExternalIdentity unique constraint is enforced",
+          "given": "an ExternalIdentity record already exists for a given provider_id and external_user_id",
+          "when": "a second ExternalIdentity with the same provider_id and external_user_id is persisted",
+          "then": "a constraint violation exception is thrown"
+        },
+        {
+          "scenario": "OutboxEvent entity maps to outbox_event table",
+          "given": "the Flyway migration has run",
+          "when": "an OutboxEvent is persisted with aggregate_type, aggregate_id, event_type, and payload",
+          "then": "the row is visible in the outbox_event table with published defaulting to false"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create UserProfile JPA entity",
+          "description": "Add xyz.catuns.onboarding.user.domain.UserProfile with @Entity mapping to user_profile. Fields: id (UUID, @GeneratedValue using UUID strategy), display_name, primary_email, status (mapped to UserStatus enum), created_at, updated_at. Add @PrePersist and @PreUpdate hooks for timestamps."
+        },
+        {
+          "summary": "Create ExternalProvider JPA entity",
+          "description": "Add xyz.catuns.onboarding.user.domain.ExternalProvider with @Entity mapping to external_provider. Fields: id, provider_key (mapped to ProviderKey enum: GITHUB, ATLASSIAN), display_name, created_at."
+        },
+        {
+          "summary": "Create ExternalIdentity JPA entity",
+          "description": "Add xyz.catuns.onboarding.user.domain.ExternalIdentity with @Entity mapping to external_identity. Map the unique constraint on (provider_id, external_user_id). Include @ManyToOne to UserProfile and ExternalProvider. Map profile_json as a String column with columnDefinition = \"jsonb\"."
+        },
+        {
+          "summary": "Create IdentityLink JPA entity",
+          "description": "Add xyz.catuns.onboarding.user.domain.IdentityLink with @Entity mapping to identity_link. Map match_strategy as MatchStrategy enum (EMAIL_EXACT, EMAIL_ALIAS_NORMALIZED, MANUAL_ADMIN_CONFIRMATION, UNVERIFIED). Include @ManyToOne to UserProfile and two @ManyToOne references to ExternalIdentity for github_identity_id and atlassian_identity_id."
+        },
+        {
+          "summary": "Create AppRole, UserRoleAssignment JPA entities",
+          "description": "Add AppRole entity mapping to app_role with role_key as AppRoleKey enum (STUDENT, INSTRUCTOR, ADMIN). Add UserRoleAssignment as a composite-key bridge entity with @ManyToOne to UserProfile and AppRole."
+        },
+        {
+          "summary": "Create OutboxEvent JPA entity",
+          "description": "Add xyz.catuns.onboarding.user.domain.OutboxEvent with @Entity mapping to outbox_event. Fields: id, aggregate_type, aggregate_id, event_type, payload (jsonb), published (default false), created_at, published_at. This entity is shared by pattern across all services — implement it per-service under each service's domain package."
+        },
+        {
+          "summary": "Write Flyway migration V1__create_user_service_schema.sql",
+          "description": "Create src/main/resources/db/migration/V1__create_user_service_schema.sql with DDL for user_profile, external_provider, external_identity (with unique constraint), identity_link, app_role, user_role_assignment, and outbox_event. Use the exact DDL from docs/schemas/normalized-database-schema.md."
+        },
+        {
+          "summary": "Write unit tests for user-service entities",
+          "description": "Add @DataJpaTest slice tests verifying persistence and retrieval of UserProfile, ExternalIdentity (including unique constraint), IdentityLink, and OutboxEvent using the Testcontainers configuration already present in the test directory."
+        }
+      ]
+    },
+    {
+      "summary": "JPA entities and Flyway migrations for onboarding-service domain",
+      "description": "Implement JPA entities and Flyway migration scripts in <backend/onboarding-service/> for all tables owned by the onboarding-service database. Tables in scope: onboarding_request, onboarding_step_type, onboarding_step, and outbox_event. Entity classes go under xyz.catuns.onboarding.service.domain. Flyway scripts go under <src/main/resources/db/migration/>. The onboarding_step_type table is a reference table seeded by migration; do not model it as a mutable entity. onboarding_step.state must map to an OnboardingStepState enum. onboarding_request.state must map to an OnboardingRequestState enum.",
+      "labels": ["onboarding-service", "jpa", "flyway", "persistence", "domain"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Flyway migrations apply cleanly for onboarding-service",
+          "given": "a fresh onboarding_service database is available",
+          "when": "the onboarding-service application starts",
+          "then": "all tables (onboarding_request, onboarding_step_type, onboarding_step, outbox_event) are created and onboarding_step_type is seeded with IDENTITY_CORRELATION, GITHUB_TEAM_PROVISIONING, and JIRA_GROUP_PROVISIONING rows"
+        },
+        {
+          "scenario": "OnboardingRequest persists with initial state",
+          "given": "an OnboardingRequest is constructed with state REQUESTED and source SELF_REGISTRATION",
+          "when": "it is saved",
+          "then": "it can be retrieved with all fields intact including correlation_id as a UUID"
+        },
+        {
+          "scenario": "OnboardingStep links to request and step type",
+          "given": "an OnboardingRequest and a step_type_id for IDENTITY_CORRELATION exist",
+          "when": "an OnboardingStep with state PENDING is persisted referencing that request and type",
+          "then": "the step loads with the correct parent request and step type resolved"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create OnboardingRequest JPA entity",
+          "description": "Add xyz.catuns.onboarding.service.domain.OnboardingRequest with @Entity mapping to onboarding_request. Map state as OnboardingRequestState enum (REQUESTED, IN_PROGRESS, COMPLETED, PARTIAL_SUCCESS, FAILED) and source as OnboardingSource enum (SELF_REGISTRATION, ADMIN_RETRY, REPROVISION). Map correlation_id as UUID."
+        },
+        {
+          "summary": "Create OnboardingStep JPA entity",
+          "description": "Add xyz.catuns.onboarding.service.domain.OnboardingStep with @Entity mapping to onboarding_step. Map state as OnboardingStepState enum (PENDING, PROCESSING, SUCCEEDED, PENDING_EXTERNAL_ACCEPTANCE, FAILED, MANUAL_REVIEW). Include @ManyToOne to OnboardingRequest. Map provider_target_id as a bare UUID column (no FK entity — cross-service reference)."
+        },
+        {
+          "summary": "Create OnboardingStepType reference mapping",
+          "description": "Add xyz.catuns.onboarding.service.domain.OnboardingStepType with @Entity(readonly) or @Immutable mapping to onboarding_step_type. Map step_key as StepType enum (IDENTITY_CORRELATION, GITHUB_TEAM_PROVISIONING, JIRA_GROUP_PROVISIONING)."
+        },
+        {
+          "summary": "Create OutboxEvent JPA entity for onboarding-service",
+          "description": "Add xyz.catuns.onboarding.service.domain.OutboxEvent with the same field mapping as the user-service OutboxEvent but under the onboarding-service package and onboarding_service database."
+        },
+        {
+          "summary": "Write Flyway migration V1__create_onboarding_service_schema.sql",
+          "description": "Create src/main/resources/db/migration/V1__create_onboarding_service_schema.sql with DDL for onboarding_request, onboarding_step_type, onboarding_step, and outbox_event. Seed onboarding_step_type with the three step type rows."
+        },
+        {
+          "summary": "Write unit tests for onboarding-service entities",
+          "description": "Add @DataJpaTest slice tests verifying that OnboardingRequest and OnboardingStep can be persisted and retrieved, state enum mappings are correct, and Flyway seeding of onboarding_step_type is visible."
+        }
+      ]
+    },
+    {
+      "summary": "JPA entities and Flyway migrations for provisioning-service domain",
+      "description": "Implement JPA entities and Flyway migration scripts in <backend/provisioning-service/> for all tables owned by the provisioning-service database. Tables in scope: provider_target, group_mapping_rule, provisioning_audit_log, and outbox_event. Entity classes go under xyz.catuns.onboarding.provisioning.domain. provider_target.target_type must map to a TargetType enum (GITHUB_TEAM, ATLASSIAN_GROUP). provisioning_audit_log.result_state must map to a ResultState enum (SUCCESS, PENDING, FAILURE). request_payload and response_payload columns must be mapped as String with columnDefinition = \"jsonb\".",
+      "labels": ["provisioning-service", "jpa", "flyway", "persistence", "domain"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Flyway migrations apply cleanly for provisioning-service",
+          "given": "a fresh provisioning_service database is available",
+          "when": "the provisioning-service application starts",
+          "then": "provider_target, group_mapping_rule, provisioning_audit_log, and outbox_event tables are created with correct constraints"
+        },
+        {
+          "scenario": "ProviderTarget unique constraint is enforced",
+          "given": "a ProviderTarget with a given provider_id, target_type, and external_key already exists",
+          "when": "a duplicate ProviderTarget is saved",
+          "then": "a constraint violation exception is thrown"
+        },
+        {
+          "scenario": "ProvisioningAuditLog persists JSONB payloads",
+          "given": "a ProvisioningAuditLog entry is created with a JSON string for request_payload and response_payload",
+          "when": "it is saved and retrieved",
+          "then": "both payload fields are returned as their original JSON string values"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create ProviderTarget JPA entity",
+          "description": "Add xyz.catuns.onboarding.provisioning.domain.ProviderTarget with @Entity mapping to provider_target. Map target_type as TargetType enum (GITHUB_TEAM, ATLASSIAN_GROUP). Map provider_id as a bare UUID (cross-service reference, no FK entity). Add unique constraint on (provider_id, target_type, external_key). Map metadata_json as String with columnDefinition = \"jsonb\"."
+        },
+        {
+          "summary": "Create GroupMappingRule JPA entity",
+          "description": "Add xyz.catuns.onboarding.provisioning.domain.GroupMappingRule with @Entity mapping to group_mapping_rule. Map app_role_id as a bare UUID (cross-service reference). Include @ManyToOne to ProviderTarget. Map enabled and priority_order fields."
+        },
+        {
+          "summary": "Create ProvisioningAuditLog JPA entity",
+          "description": "Add xyz.catuns.onboarding.provisioning.domain.ProvisioningAuditLog with @Entity mapping to provisioning_audit_log. Map result_state as ResultState enum (SUCCESS, PENDING, FAILURE). Map request_payload and response_payload as String with columnDefinition = \"jsonb\". Map provider_id and onboarding_step_id as bare UUIDs (cross-service references)."
+        },
+        {
+          "summary": "Create OutboxEvent JPA entity for provisioning-service",
+          "description": "Add xyz.catuns.onboarding.provisioning.domain.OutboxEvent with the same field mapping as the other service OutboxEvent entities, scoped to the provisioning-service package and provisioning_service database."
+        },
+        {
+          "summary": "Write Flyway migration V1__create_provisioning_service_schema.sql",
+          "description": "Create src/main/resources/db/migration/V1__create_provisioning_service_schema.sql with DDL for provider_target (with unique constraint), group_mapping_rule, provisioning_audit_log, and outbox_event."
+        },
+        {
+          "summary": "Write unit tests for provisioning-service entities",
+          "description": "Add @DataJpaTest slice tests verifying ProviderTarget unique constraint enforcement, GroupMappingRule persistence, and ProvisioningAuditLog JSONB payload round-trip."
+        }
+      ]
+    },
+    {
+      "summary": "Spring Data JPA repository layer across all services",
+      "description": "Implement Spring Data JPA repository interfaces for all JPA entities across user-service, onboarding-service, and provisioning-service. Each repository should extend JpaRepository and define only the query methods required by the domain logic documented in <docs/design-spec.md> and <docs/request-flow.md>. Do not add speculative query methods beyond what phase 1 and phase 2 will concretely need. Integration tests must verify at minimum one non-trivial finder method per repository using @DataJpaTest with Testcontainers.",
+      "labels": ["repository", "spring-data", "jpa", "persistence", "testing"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "UserProfile can be found by primary email",
+          "given": "a UserProfile with primary_email 'user@example.com' has been persisted",
+          "when": "UserProfileRepository.findByPrimaryEmail('user@example.com') is called",
+          "then": "the correct UserProfile is returned"
+        },
+        {
+          "scenario": "ExternalIdentity can be found by provider and external user ID",
+          "given": "an ExternalIdentity for a specific provider_id and external_user_id has been persisted",
+          "when": "ExternalIdentityRepository.findByProviderIdAndExternalUserId is called with matching values",
+          "then": "the Optional is present and contains the correct entity"
+        },
+        {
+          "scenario": "OnboardingRequest can be found by user profile ID",
+          "given": "an OnboardingRequest linked to a user_profile_id has been persisted",
+          "when": "OnboardingRequestRepository.findByUserProfileId is called",
+          "then": "the request is returned in the result list"
+        },
+        {
+          "scenario": "ProviderTarget can be queried by target type and enabled flag",
+          "given": "multiple ProviderTarget rows with mixed enabled values exist",
+          "when": "ProviderTargetRepository.findByTargetTypeAndEnabledTrue is called for GITHUB_TEAM",
+          "then": "only enabled GITHUB_TEAM targets are returned"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add user-service repository interfaces",
+          "description": "Create UserProfileRepository, ExternalProviderRepository, ExternalIdentityRepository, IdentityLinkRepository, AppRoleRepository, and OutboxEventRepository under xyz.catuns.onboarding.user.repository. Add findByPrimaryEmail on UserProfileRepository and findByProviderIdAndExternalUserId on ExternalIdentityRepository."
+        },
+        {
+          "summary": "Add onboarding-service repository interfaces",
+          "description": "Create OnboardingRequestRepository and OnboardingStepRepository under xyz.catuns.onboarding.service.repository. Add findByUserProfileId on OnboardingRequestRepository and findByOnboardingRequestId on OnboardingStepRepository."
+        },
+        {
+          "summary": "Add provisioning-service repository interfaces",
+          "description": "Create ProviderTargetRepository, GroupMappingRuleRepository, ProvisioningAuditLogRepository, and OutboxEventRepository under xyz.catuns.onboarding.provisioning.repository. Add findByTargetTypeAndEnabledTrue on ProviderTargetRepository."
+        },
+        {
+          "summary": "Add OutboxEvent unpublished query across all services",
+          "description": "Add findByPublishedFalseOrderByCreatedAtAsc to each service's OutboxEventRepository to support the outbox polling pattern that will be wired in phase 4."
+        },
+        {
+          "summary": "Write @DataJpaTest integration tests for all repositories",
+          "description": "Add one @DataJpaTest test class per service verifying at minimum: save-and-find-by-id for the primary aggregate, one custom finder method, and constraint violation behavior. Use the TestcontainersConfiguration already present in each service's test directory."
+        }
+      ]
+    },
+    {
+      "summary": "Seed data for provider targets and mapping rules",
+      "description": "Create Flyway seed migration scripts in <backend/provisioning-service/> that populate provider_target and group_mapping_rule with realistic development defaults. The seed data must include at minimum one GitHub team target and one Atlassian group target, along with mapping rules linking them to the STUDENT and INSTRUCTOR app roles. Also seed external_provider rows (GITHUB and ATLASSIAN) in the user-service database. Seed data must be isolated in a dedicated migration script (V2) so it can be skipped or overridden in production without re-running schema migrations.",
+      "labels": ["provisioning-service", "user-service", "flyway", "seed-data", "configuration"],
+      "priority": "Medium",
+      "storyPoints": 3,
+      "acceptanceCriteria": [
+        {
+          "scenario": "GITHUB and ATLASSIAN external providers are seeded",
+          "given": "the user-service migration has run",
+          "when": "the external_provider table is queried",
+          "then": "rows for provider_key GITHUB and ATLASSIAN both exist"
+        },
+        {
+          "scenario": "Default provider targets are seeded",
+          "given": "the provisioning-service migration has run",
+          "when": "the provider_target table is queried",
+          "then": "at least one GITHUB_TEAM target and one ATLASSIAN_GROUP target are present and enabled"
+        },
+        {
+          "scenario": "Group mapping rules link roles to targets",
+          "given": "the seed migration has run",
+          "when": "group_mapping_rule is queried for the STUDENT role",
+          "then": "at least one enabled rule mapping to a provider_target exists"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Write V2__seed_external_providers.sql for user-service",
+          "description": "Create src/main/resources/db/migration/V2__seed_external_providers.sql in user-service that inserts GITHUB and ATLASSIAN rows into external_provider using fixed seed UUIDs so references are stable across environments."
+        },
+        {
+          "summary": "Write V2__seed_app_roles.sql for user-service",
+          "description": "Create a migration (or extend V2) that inserts STUDENT, INSTRUCTOR, and ADMIN rows into app_role using fixed seed UUIDs."
+        },
+        {
+          "summary": "Write V2__seed_provider_targets_and_rules.sql for provisioning-service",
+          "description": "Create src/main/resources/db/migration/V2__seed_provider_targets_and_rules.sql in provisioning-service inserting default provider_target rows (one GITHUB_TEAM, one ATLASSIAN_GROUP) and group_mapping_rule rows referencing the seed role UUIDs from user-service. Document the shared seed UUID constants in a comment block."
+        },
+        {
+          "summary": "Write seed data verification test",
+          "description": "Add a @DataJpaTest or @SpringBootTest slice test in provisioning-service confirming that after Flyway runs, ProviderTargetRepository returns at least one enabled GITHUB_TEAM and one enabled ATLASSIAN_GROUP target."
+        }
+      ]
+    },
+    {
+      "summary": "Onboarding state transition domain service",
+      "description": "Implement a domain service in <backend/onboarding-service/> that owns all state transitions for OnboardingRequest and OnboardingStep entities. The service must enforce valid state machine transitions, prevent illegal state changes, and be the single point through which state is mutated. Transitions required: OnboardingRequest (REQUESTED -> IN_PROGRESS -> COMPLETED | PARTIAL_SUCCESS | FAILED), OnboardingStep (PENDING -> PROCESSING -> SUCCEEDED | PENDING_EXTERNAL_ACCEPTANCE | FAILED | MANUAL_REVIEW). The service must also compute the aggregate OnboardingRequest state from its constituent step states (e.g., all steps SUCCEEDED -> COMPLETED, any step FAILED with others SUCCEEDED -> PARTIAL_SUCCESS). This service will be the foundation for phase 3 orchestration.",
+      "labels": ["onboarding-service", "domain-service", "state-machine", "business-logic"],
+      "priority": "High",
+      "storyPoints": 8,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Valid OnboardingStep transition is accepted",
+          "given": "an OnboardingStep in state PENDING",
+          "when": "transitionStepState(step, PROCESSING) is called on the domain service",
+          "then": "the step state is updated to PROCESSING and persisted"
+        },
+        {
+          "scenario": "Illegal OnboardingStep transition is rejected",
+          "given": "an OnboardingStep in state SUCCEEDED",
+          "when": "transitionStepState(step, PENDING) is called",
+          "then": "an IllegalStateTransitionException is thrown and the step state is unchanged"
+        },
+        {
+          "scenario": "OnboardingRequest state is aggregated from steps",
+          "given": "an OnboardingRequest with three steps where two are SUCCEEDED and one is FAILED",
+          "when": "computeRequestState(request) is called",
+          "then": "the returned state is PARTIAL_SUCCESS"
+        },
+        {
+          "scenario": "All steps succeeded means COMPLETED",
+          "given": "an OnboardingRequest where all steps are in state SUCCEEDED",
+          "when": "computeRequestState(request) is called",
+          "then": "the returned state is COMPLETED"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Define OnboardingStepState and OnboardingRequestState transition maps",
+          "description": "Create a StepStateTransitions class and a RequestStateTransitions class in xyz.catuns.onboarding.service.domain that declare which target states are reachable from each source state as immutable maps."
+        },
+        {
+          "summary": "Implement OnboardingStepStateMachine",
+          "description": "Create xyz.catuns.onboarding.service.domain.OnboardingStepStateMachine with a transitionTo(OnboardingStep, OnboardingStepState) method. Validate the transition against StepStateTransitions, throw IllegalStateTransitionException for invalid transitions, and update the step's state and updated_at."
+        },
+        {
+          "summary": "Implement OnboardingRequestStateResolver",
+          "description": "Create xyz.catuns.onboarding.service.domain.OnboardingRequestStateResolver with a resolve(List<OnboardingStep>) method that returns the aggregate OnboardingRequestState based on step states: all SUCCEEDED -> COMPLETED, any FAILED with no non-terminal remaining -> PARTIAL_SUCCESS if any SUCCEEDED else FAILED, any still PENDING or PROCESSING -> IN_PROGRESS."
+        },
+        {
+          "summary": "Implement OnboardingDomainService",
+          "description": "Create @Service xyz.catuns.onboarding.service.domain.OnboardingDomainService that coordinates OnboardingStepStateMachine and OnboardingRequestStateResolver. Expose: startRequest(OnboardingRequest), transitionStep(OnboardingStep, OnboardingStepState), and recalculateRequestState(OnboardingRequest). All mutations must be wrapped in @Transactional."
+        },
+        {
+          "summary": "Create IllegalStateTransitionException",
+          "description": "Add xyz.catuns.onboarding.service.domain.IllegalStateTransitionException as an unchecked exception with fields for the step or request ID, the source state, and the attempted target state."
+        },
+        {
+          "summary": "Write unit tests for state machine and resolver",
+          "description": "Add unit tests for OnboardingStepStateMachine covering all valid transitions and all illegal transition attempts. Add unit tests for OnboardingRequestStateResolver covering COMPLETED, PARTIAL_SUCCESS, FAILED, and IN_PROGRESS aggregate outcomes with various step state combinations."
+        },
+        {
+          "summary": "Write @SpringBootTest integration test for OnboardingDomainService",
+          "description": "Add an integration test using Testcontainers that persists an OnboardingRequest with steps, drives transitions through OnboardingDomainService, and asserts both the step states and the computed request state are persisted correctly."
+        }
+      ]
+    }
+  ]
+}

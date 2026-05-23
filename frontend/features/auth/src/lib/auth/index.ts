@@ -1,10 +1,10 @@
-import type { Session, User } from '../types/next-auth';
 import NextAuth from 'next-auth';
 import type { JWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import Github from 'next-auth/providers/github';
-import { authConfig } from './auth.config';
+import Github, { type GitHubProfile } from 'next-auth/providers/github';
 import { GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET } from "../config/env";
+import type { Session, User } from '../types/next-auth';
+import { authConfig } from './auth.config';
 
 export const { auth, handlers, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -19,19 +19,15 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         email: { label: 'Email', type: 'text' },
         password: { label: 'Password', type: 'password' },
       },
+
       async authorize(credentials) {
         return null;
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        // token.role = user.role;
-        // token.jwtToken = user.jwtToken;
-        // token.refreshToken = user.refreshToken;
-        // token.expiration = user.expiration;
-      }
+    async jwt({ token, account, profile, trigger }) {
+
       return token;
     },
     async session({

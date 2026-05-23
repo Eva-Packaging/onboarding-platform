@@ -1,0 +1,272 @@
+{
+  "summary": "Phase 0: Project Setup",
+  "description": "Bootstrap the full project foundation so that all subsequent development phases can begin from a clean, reproducible baseline. This epic covers the Nx monorepo and Next.js frontend skeleton, Spring Boot microservice module initialization, local development infrastructure, baseline architecture documentation, and GCP Terraform scaffolding. Exit criteria: the application boots locally, all five architecture documents are in place, and core package and naming conventions (xyz.catuns.onboarding) are fixed.",
+  "labels": ["phase-0", "setup", "infrastructure", "monorepo", "documentation"],
+  "priority": "High",
+  "userType": "operations engineer",
+  "functionality": "bootstrap the full monorepo, service skeletons, local development stack, architecture documentation, and Terraform scaffolding",
+  "benefit": "every subsequent phase starts from a clean, reproducible baseline with no naming, structure, or environment ambiguity",
+  "stories": [
+    {
+      "summary": "Initialize Nx monorepo with Next.js frontend skeleton",
+      "description": "Set up the <frontend/> Nx monorepo using pnpm. Scaffold the Next.js application under <frontend/apps/web/> with TypeScript and create page stubs for /register, /onboarding, /dashboard, and /support. Add the <frontend/features/auth/> library with Auth.js (NextAuth) wired for GitHub OAuth and Credentials providers. Configure the Zod-validated env schema in <frontend/apps/web/lib/config/env.ts> with BACKEND_API_URL as a required variable. The dev server must start cleanly.",
+      "labels": ["frontend", "monorepo", "nx", "nextjs", "auth"],
+      "priority": "High",
+      "storyPoints": 3,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Monorepo dev server starts",
+          "given": "the frontend/ directory is set up with pnpm and Nx",
+          "when": "pnpm nx run web:serve is executed",
+          "then": "the Next.js dev server starts without errors and the /register page is reachable"
+        },
+        {
+          "scenario": "Auth feature library compiles",
+          "given": "the features/auth library is added to the Nx workspace",
+          "when": "pnpm nx run web:build is executed",
+          "then": "the build completes successfully with no TypeScript errors"
+        },
+        {
+          "scenario": "Environment schema enforces required variables",
+          "given": "BACKEND_API_URL is missing from the environment",
+          "when": "the Next.js application starts",
+          "then": "a Zod validation error is thrown identifying the missing variable"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create Nx workspace with pnpm",
+          "description": "Initialise the Nx monorepo under frontend/ using pnpm as the package manager and configure nx.json with the correct project layout."
+        },
+        {
+          "summary": "Scaffold Next.js app with TypeScript",
+          "description": "Add the web app under frontend/apps/web/ with TypeScript, configure tsconfig, and create page stubs for /register, /onboarding, /dashboard, and /support."
+        },
+        {
+          "summary": "Add auth feature library with GitHub OAuth",
+          "description": "Create frontend/features/auth/ as an Nx library, install Auth.js (NextAuth), and wire GitHub OAuth and Credentials providers with JWT callbacks capturing githubId, githubLogin, and githubAccessToken."
+        },
+        {
+          "summary": "Configure Zod env schema",
+          "description": "Add frontend/apps/web/lib/config/env.ts with a Zod schema that validates all required environment variables including BACKEND_API_URL at startup."
+        },
+        {
+          "summary": "Add .env.example for frontend",
+          "description": "Create frontend/apps/web/.env.example listing all required environment variables with placeholder values and inline comments."
+        }
+      ]
+    },
+    {
+      "summary": "Initialize Spring Boot microservice modules",
+      "description": "Create the three Spring Boot Maven modules under <backend/>: user-service, onboarding-service, and provisioning-service. Each module must use the package root xyz.catuns.onboarding, include the correct Spring Boot starters (Web, Data JPA, Kafka, Actuator, Validation, PostgreSQL driver), define a minimal application.yml stub, and compile and start without errors. The Maven multi-module parent POM must define shared dependency management.",
+      "labels": ["backend", "spring-boot", "maven", "microservices"],
+      "priority": "High",
+      "storyPoints": 3,
+      "acceptanceCriteria": [
+        {
+          "scenario": "All services compile",
+          "given": "the backend Maven multi-module project is set up",
+          "when": "./mvnw clean package is run from any service directory",
+          "then": "all three services compile with no errors"
+        },
+        {
+          "scenario": "Service starts with actuator health endpoint",
+          "given": "a local Postgres instance is available",
+          "when": "./mvnw spring-boot:run is executed for user-service",
+          "then": "the service starts and GET /actuator/health returns {\"status\": \"UP\"}"
+        },
+        {
+          "scenario": "Package naming convention is enforced",
+          "given": "any Spring Boot service source file",
+          "when": "the package declaration is inspected",
+          "then": "it begins with xyz.catuns.onboarding"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create Maven parent POM with dependency management",
+          "description": "Add backend/pom.xml as the multi-module parent defining Spring Boot version, shared dependency management, and module declarations for user-service, onboarding-service, and provisioning-service."
+        },
+        {
+          "summary": "Scaffold user-service module",
+          "description": "Create backend/user-service/ with Maven wrapper, src/main/java/xyz/catuns/onboarding/user/ package structure, UserServiceApplication main class, and application.yml stub with datasource and server port placeholders."
+        },
+        {
+          "summary": "Scaffold onboarding-service module",
+          "description": "Create backend/onboarding-service/ with Maven wrapper, src/main/java/xyz/catuns/onboarding/onboarding/ package structure, OnboardingServiceApplication main class, and application.yml stub."
+        },
+        {
+          "summary": "Scaffold provisioning-service module",
+          "description": "Create backend/provisioning-service/ with Maven wrapper, src/main/java/xyz/catuns/onboarding/provisioning/ package structure, ProvisioningServiceApplication main class, and application.yml stub."
+        },
+        {
+          "summary": "Add Spring Boot starters to each service",
+          "description": "Add spring-boot-starter-web, spring-boot-starter-data-jpa, spring-boot-starter-actuator, spring-boot-starter-validation, spring-kafka, and postgresql driver dependencies to each service POM."
+        }
+      ]
+    },
+    {
+      "summary": "Configure local development infrastructure with Docker Compose",
+      "description": "Create a Docker Compose file under <infra/docker/> that starts a PostgreSQL 15 container with three databases auto-initialised (user_service, onboarding_service, provisioning_service), a Kafka broker in KRaft mode on port 9092, and a Confluent Schema Registry on port 9090. Provide <infra/docker/.env.example> listing all required environment variables. All Spring Boot services must be able to connect using the values in the example env file.",
+      "labels": ["infra", "docker", "kafka", "postgres", "schema-registry"],
+      "priority": "High",
+      "storyPoints": 3,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Compose stack starts cleanly",
+          "given": "Docker is running and infra/docker/.env is populated from .env.example",
+          "when": "docker compose -f infra/docker/docker-compose.yml up -d is executed",
+          "then": "all containers reach a healthy or running state with no startup errors"
+        },
+        {
+          "scenario": "Three databases are accessible",
+          "given": "the Postgres container is running",
+          "when": "a connection is attempted to user_service, onboarding_service, and provisioning_service databases",
+          "then": "all three databases accept connections using the configured credentials"
+        },
+        {
+          "scenario": "Kafka broker accepts connections",
+          "given": "the Kafka container is running in KRaft mode",
+          "when": "a producer client connects to localhost:9092",
+          "then": "the connection is accepted and topic metadata can be retrieved"
+        },
+        {
+          "scenario": "Schema Registry responds",
+          "given": "the Schema Registry container is running",
+          "when": "GET http://localhost:9090/subjects is called",
+          "then": "the response is HTTP 200 with a JSON array"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Write docker-compose.yml with Postgres, Kafka, Schema Registry",
+          "description": "Create infra/docker/docker-compose.yml defining services for postgres (image: postgres:15), kafka (KRaft mode), and schema-registry (Confluent), with correct port mappings and health checks."
+        },
+        {
+          "summary": "Add Postgres init scripts for three databases",
+          "description": "Create infra/docker/initdb/ SQL scripts that CREATE DATABASE user_service, onboarding_service, and provisioning_service during Postgres container first-start."
+        },
+        {
+          "summary": "Configure Kafka in KRaft mode",
+          "description": "Set KAFKA_PROCESS_ROLES, KAFKA_NODE_ID, KAFKA_CONTROLLER_QUORUM_VOTERS, and related KRaft environment variables so Kafka starts without ZooKeeper on port 9092."
+        },
+        {
+          "summary": "Create .env.example for local infrastructure",
+          "description": "Add infra/docker/.env.example with placeholder values for POSTGRES_USER, POSTGRES_PASSWORD, KAFKA_ADVERTISED_LISTENERS, and any other variables consumed by the Compose file."
+        }
+      ]
+    },
+    {
+      "summary": "Establish baseline architecture documentation",
+      "description": "Create and finalize the five authoritative documentation files under <docs/>. Each file must accurately reflect the current architecture decisions, naming conventions, and contracts that all subsequent phases will implement against. The documents are: design-spec.md (architecture decisions and hard constraints), request-flow.md (end-to-end flow descriptions), rest-api-reference.md (all REST endpoint shapes and status codes), schemas/normalized-database-schema.md (canonical DB schema), and schemas/kafka-event-schema.md (Avro schemas, topic names, and compatibility rules).",
+      "labels": ["documentation", "architecture", "api-contract", "event-schema"],
+      "priority": "Medium",
+      "storyPoints": 2,
+      "acceptanceCriteria": [
+        {
+          "scenario": "All five documentation files exist",
+          "given": "the docs/ directory is inspected",
+          "when": "each required file path is checked",
+          "then": "design-spec.md, request-flow.md, rest-api-reference.md, schemas/normalized-database-schema.md, and schemas/kafka-event-schema.md all exist and are non-empty"
+        },
+        {
+          "scenario": "REST reference matches hard constraints",
+          "given": "rest-api-reference.md is read",
+          "when": "the registration endpoint is checked",
+          "then": "the entry point is documented as POST /api/v1/registrations matching the CLAUDE.md hard constraint"
+        },
+        {
+          "scenario": "Kafka schema file defines topic names",
+          "given": "schemas/kafka-event-schema.md is read",
+          "when": "the topic list is inspected",
+          "then": "edu.user.registered.v1, edu.identity.correlation.v1, edu.provisioning.github.v1, edu.provisioning.atlassian.v1, and edu.onboarding.lifecycle.v1 are all documented"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Write design-spec.md",
+          "description": "Document architecture decisions, service boundaries, hard constraints (async provisioning, outbox pattern, auth is frontend-only), and acceptance criteria for each phase."
+        },
+        {
+          "summary": "Write request-flow.md",
+          "description": "Document the end-to-end happy path and failure flows including GitHub OAuth, registration, identity correlation, provisioning, and frontend polling."
+        },
+        {
+          "summary": "Write rest-api-reference.md",
+          "description": "Document all REST endpoints with request/response shapes, HTTP status codes, and error envelope format. Cover all endpoints owned by user-service and onboarding-service."
+        },
+        {
+          "summary": "Write normalized-database-schema.md",
+          "description": "Document the canonical DB schema for all tables across user_service, onboarding_service, and provisioning_service databases including column types, constraints, and foreign keys."
+        },
+        {
+          "summary": "Write kafka-event-schema.md",
+          "description": "Document all Avro schemas under namespace xyz.catuns.onboarding.events, topic names, subject naming conventions, and backward-compatibility rules."
+        }
+      ]
+    },
+    {
+      "summary": "Scaffold GCP Terraform infrastructure modules",
+      "description": "Create Terraform module scaffolding under <infra/terraform/> for the GCP deployment target. The scaffolding must include module stubs for Cloud Run service definitions (user-service, onboarding-service, provisioning-service, and the web app), Cloud SQL PostgreSQL, Kafka infrastructure (Confluent Cloud or Pub/Sub bridge), Secret Manager secrets for provider credentials (GitHub token, Atlassian API key), IAM service accounts with least-privilege bindings, and environment-specific variable files for dev and prod. All modules must pass terraform validate. No secrets or credentials may be hardcoded.",
+      "labels": ["infra", "terraform", "gcp", "cloud-run", "cloud-sql", "secret-manager"],
+      "priority": "Medium",
+      "storyPoints": 8,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Terraform initialises successfully",
+          "given": "infra/terraform/ is populated with module scaffolding",
+          "when": "terraform init is run from the root Terraform directory",
+          "then": "all providers and modules initialise with no errors"
+        },
+        {
+          "scenario": "Terraform validate passes",
+          "given": "the Terraform modules are scaffolded",
+          "when": "terraform validate is run",
+          "then": "the configuration is valid with no errors or warnings"
+        },
+        {
+          "scenario": "No secrets hardcoded",
+          "given": "the Terraform source files are inspected",
+          "when": "any file is checked for credential values",
+          "then": "all secrets reference Secret Manager data sources or input variables with sensitive = true; no literal credentials appear"
+        },
+        {
+          "scenario": "Environment-specific variable files exist",
+          "given": "the infra/terraform/ directory is inspected",
+          "when": "the file list is checked",
+          "then": "separate .tfvars files exist for dev and prod environments"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create Terraform root module and backend config",
+          "description": "Add infra/terraform/main.tf, variables.tf, outputs.tf, and versions.tf with required GCP provider version, backend config pointing to GCS for remote state, and project/region variables."
+        },
+        {
+          "summary": "Add Cloud Run module stubs for each service",
+          "description": "Create Terraform modules for each Cloud Run service (user-service, onboarding-service, provisioning-service, web) with image, env vars (sourced from Secret Manager), scaling config, and service account binding placeholders."
+        },
+        {
+          "summary": "Add Cloud SQL PostgreSQL module",
+          "description": "Create a Cloud SQL module stub for PostgreSQL 15, private IP networking, automated backups, and database/user provisioning for user_service, onboarding_service, and provisioning_service."
+        },
+        {
+          "summary": "Add Secret Manager module for provider credentials",
+          "description": "Define Secret Manager secret resources for GITHUB_TOKEN, ATLASSIAN_API_KEY, ATLASSIAN_ACCOUNT_EMAIL, POSTGRES_PASSWORD, and any other runtime secrets. Reference these in Cloud Run env var definitions."
+        },
+        {
+          "summary": "Add IAM service accounts with least-privilege bindings",
+          "description": "Create service accounts for each Cloud Run service and bind only the IAM roles required: Secret Manager Secret Accessor, Cloud SQL Client, and Pub/Sub roles as appropriate per service."
+        },
+        {
+          "summary": "Create dev and prod tfvars files",
+          "description": "Add infra/terraform/environments/dev.tfvars and infra/terraform/environments/prod.tfvars with environment-specific values for project ID, region, instance sizing, and replica counts."
+        },
+        {
+          "summary": "Add terraform.gitignore and lock file",
+          "description": "Ensure infra/terraform/.gitignore excludes .tfstate, .tfstate.backup, .tfvars containing secrets, and the .terraform/ directory. Commit the .terraform.lock.hcl provider lock file."
+        }
+      ]
+    }
+  ]
+}

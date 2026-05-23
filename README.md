@@ -56,11 +56,12 @@ A practical initial repository layout is shown below:
 ```text
 apps/
   web/
-services/
+backend/
   user-service/
   onboarding-service/
   provisioning-service/
 infra/
+  docker/
   terraform/
 docs/
 ```
