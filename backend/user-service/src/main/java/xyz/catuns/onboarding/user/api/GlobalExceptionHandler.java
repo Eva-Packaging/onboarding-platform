@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import xyz.catuns.onboarding.user.api.dto.ErrorResponse;
 import xyz.catuns.onboarding.user.exception.DuplicateRegistrationException;
+import xyz.catuns.onboarding.user.exception.OnboardingServiceUnavailableException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -45,6 +46,13 @@ public class GlobalExceptionHandler {
     ResponseEntity<ErrorResponse> handleDuplicateRegistration(DuplicateRegistrationException ex) {
         return buildResponse(HttpStatus.CONFLICT, "DUPLICATE_REGISTRATION", ex.getMessage(),
                 Map.of("githubUserId", ex.getGithubUserId()));
+    }
+
+    @ExceptionHandler(OnboardingServiceUnavailableException.class)
+    ResponseEntity<ErrorResponse> handleOnboardingServiceUnavailable(OnboardingServiceUnavailableException ex) {
+        log.warn("Onboarding service unavailable", ex);
+        return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, "ONBOARDING_SERVICE_UNAVAILABLE",
+                ex.getMessage(), Map.of());
     }
 
     @ExceptionHandler(NoSuchElementException.class)
