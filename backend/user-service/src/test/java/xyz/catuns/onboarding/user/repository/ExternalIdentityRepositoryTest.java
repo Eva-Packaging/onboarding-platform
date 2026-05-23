@@ -16,6 +16,7 @@ import xyz.catuns.onboarding.user.domain.UserStatus;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -91,6 +92,25 @@ class ExternalIdentityRepositoryTest {
         List<ExternalIdentity> found = identityRepository.findByUserProfile_Id(userProfile.getId());
 
         assertThat(found).hasSize(2);
+    }
+
+    @Test
+    void findByProviderIdAndExternalUserId_returnsMatch() {
+        identityRepository.save(buildIdentity("gh-020", "byuuid"));
+
+        Optional<ExternalIdentity> found = identityRepository
+            .findByProviderIdAndExternalUserId(githubProvider.getId(), "gh-020");
+
+        assertThat(found).isPresent();
+        assertThat(found.get().getUsername()).isEqualTo("byuuid");
+    }
+
+    @Test
+    void findByProviderIdAndExternalUserId_returnsEmptyForUnknownProvider() {
+        Optional<ExternalIdentity> found = identityRepository
+            .findByProviderIdAndExternalUserId(UUID.randomUUID(), "gh-020");
+
+        assertThat(found).isEmpty();
     }
 
     @Test

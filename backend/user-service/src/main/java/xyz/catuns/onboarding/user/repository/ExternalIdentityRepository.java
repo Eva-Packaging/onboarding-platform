@@ -10,5 +10,6 @@ import java.util.UUID;
 
 public interface ExternalIdentityRepository extends JpaRepository<ExternalIdentity, UUID> {
     Optional<ExternalIdentity> findByProvider_ProviderKeyAndExternalUserId(ProviderKey providerKey, String externalUserId);
+    Optional<ExternalIdentity> findByProviderIdAndExternalUserId(UUID providerId, String externalUserId);
     List<ExternalIdentity> findByUserProfile_Id(UUID userProfileId);
 }
