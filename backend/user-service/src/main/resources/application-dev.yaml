@@ -1,11 +1,4 @@
 spring:
-  jpa:
-    hibernate:
-      ddl-auto: update
-    defer-datasource-initialization: true
-  sql:
-    init:
-      mode: always
 management:
   endpoint:
     health:
