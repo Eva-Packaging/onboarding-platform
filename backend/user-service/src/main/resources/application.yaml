@@ -6,9 +6,20 @@ app:
     description: @project.description@
     title: @project.name@
     version: @project.version@
+  feign:
+    clients:
+      onboarding: onboarding-service
 spring:
   application:
     name: user-service
+  cloud:
+    consul:
+      host: ${CONSUL_HOST:localhost}
+      port: ${CONSUL_PORT:8500}
+      discovery:
+        enabled: true
+        prefer-ip-address: true
+        instance-id: ${spring.application.name}:${server.port:8080}
   datasource:
     password: ${DATABASE_PASSWORD:password}
     url: jdbc:postgresql://${DATABASE_HOST:localhost}:${DATABASE_PORT:5432}/${DATABASE_NAME:user_service}

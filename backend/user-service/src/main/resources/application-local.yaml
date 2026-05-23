@@ -1,3 +1,10 @@
+spring:
+  cloud:
+    consul:
+      host: localhost
+      port: 8500
+      discovery:
+        enabled: false
 logging:
   level:
     root: info
