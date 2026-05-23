@@ -10,21 +10,16 @@
     "importHelpers": true,
     "target": "es2015",
     "module": "esnext",
-    "lib": [
-      "es2020",
-      "dom"
-    ],
+    "lib": ["es2020", "dom"],
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@app\\web\\*": [
-        "apps\\web\\*"
-      ]
+      "@app\\web\\*": ["apps\\web\\*"],
+      "@feature/auth": ["features/auth/src/index.ts"],
+      "@feature/auth/server": ["features/auth/src/server.ts"],
+      "@feature\\auth\\*": ["features\\auth\\src\\*"]
     }
   },
-  "exclude": [
-    "node_modules",
-    "tmp"
-  ]
+  "exclude": ["node_modules", "tmp"]
 }

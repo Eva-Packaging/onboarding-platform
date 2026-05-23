@@ -41,6 +41,11 @@
           "codeCoverage": true
         }
       }
+    },
+    "@nx/vite:build": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": ["production", "^production"]
     }
   },
   "generators": {
@@ -53,7 +58,21 @@
     "next-feature": {
       "component": {
         "projectName": "web"
+      },
+      "feature": {
+        "orgName": "feature"
+      },
+      "auth": {}
+    },
+    "@nx/react": {
+      "library": {
+        "unitTestRunner": "jest"
       }
+    }
+  },
+  "release": {
+    "version": {
+      "preVersionCommand": "pnpm dlx nx run-many -t build"
     }
   }
 }
