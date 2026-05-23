@@ -1,4 +1,4 @@
-package xyz.catuns.onboarding.user.service;
+package xyz.catuns.onboarding.user.exception;
 
 public class DuplicateRegistrationException extends RuntimeException {
 

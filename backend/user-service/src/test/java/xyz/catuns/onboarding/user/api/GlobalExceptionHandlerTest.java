@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import xyz.catuns.onboarding.user.api.dto.RegistrationRequest;
-import xyz.catuns.onboarding.user.service.DuplicateRegistrationException;
+import xyz.catuns.onboarding.user.exception.DuplicateRegistrationException;
 
 import java.util.NoSuchElementException;
 

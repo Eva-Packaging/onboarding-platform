@@ -11,7 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import xyz.catuns.onboarding.user.api.dto.ErrorResponse;
-import xyz.catuns.onboarding.user.service.DuplicateRegistrationException;
+import xyz.catuns.onboarding.user.exception.DuplicateRegistrationException;
 
 import java.util.HashMap;
 import java.util.Map;
