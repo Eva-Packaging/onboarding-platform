@@ -11,7 +11,7 @@
     <groupId>xyz.catuns.onboarding</groupId>
     <artifactId>onboarding-service</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>onboarding-service</name>
+    <name>Onboarding Service</name>
     <description>onboarding-service</description>
 
     <url/>
