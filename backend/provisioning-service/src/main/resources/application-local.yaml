@@ -1,0 +1,7 @@
+logging:
+  level:
+    root: info
+    xyz:
+      catuns:
+        onboarding:
+          provisioning: debug

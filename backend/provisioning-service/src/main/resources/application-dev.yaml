@@ -1,0 +1,18 @@
+management:
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  info:
+    env:
+      enabled: true
+logging:
+  level:
+    root: info
+    xyz:
+      catuns:
+        onboarding:
+          provisioning: debug
