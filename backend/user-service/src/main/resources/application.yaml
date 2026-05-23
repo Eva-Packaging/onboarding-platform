@@ -1,0 +1,71 @@
+app:
+  kafka:
+    partitions: 1
+    replicas: 1
+  open-api:
+    description: @project.description@
+    title: @project.name@
+    version: @project.version@
+spring:
+  application:
+    name: user-service
+  datasource:
+    password: ${DATABASE_PASSWORD:password}
+    url: jdbc:postgresql://${DATABASE_HOST:localhost}:${DATABASE_PORT:5432}/${DATABASE_NAME:user_service}
+    username: ${DATABASE_USER:default}
+  kafka:
+    producer:
+      retries: 10
+      acks: all
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        delivery.timeout: 60000
+        request.timeout.ms: 30000
+        linger.ms: 0
+        max.inflight.requests.per.connection: 5
+        enable:
+          idempotence: true
+    bootstrap-servers: ${BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      group-id: user-service-group
+      properties:
+        spring.json.trusted.packages: xyz.catuns.onboarding.user.*
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    properties:
+      schema-registry-url: ${SCHEMA_REGISTRY_URL:}
+  profiles:
+    active: dev
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+        show_sql: false
+  flyway:
+    enabled: false
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health
+  health:
+    liveness-state:
+      enabled: true
+    readiness-state:
+      enabled: true
+jwt:
+  secret: ${JWT_SECRET}
+  issuer: ${spring.application.name}
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10
+        permitted-number-of-calls-in-half-open-state: 3
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10000
