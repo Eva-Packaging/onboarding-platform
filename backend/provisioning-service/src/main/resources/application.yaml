@@ -9,6 +9,19 @@ app:
 spring:
   application:
     name: provisioning-service
+  datasource:
+    password: ${DATABASE_PASSWORD:password}
+    url: jdbc:postgresql://${DATABASE_HOST:localhost}:${DATABASE_PORT:5432}/${DATABASE_NAME:provisioning_service}
+    username: ${DATABASE_USER:default}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: true
+        show_sql: false
+  flyway:
+    enabled: true
   kafka:
     producer:
       retries: 10
