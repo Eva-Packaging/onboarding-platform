@@ -1,0 +1,195 @@
+{
+  "summary": "Spring Cloud Gateway — Unified API Entry Point and Centralized Documentation",
+  "description": "Introduce a Spring Cloud Gateway module at <backend/api-gateway/> that becomes the single public entry point for all three backend services. The gateway routes client traffic to <backend/user-service/>, <backend/onboarding-service/>, and <backend/provisioning-service/> using Consul-based load balancing and path-based predicates that follow the convention /api/v1/<service>/**. A global JWT authentication filter enforces bearer token validation at the edge and forwards identity headers downstream. Centralized API documentation is produced by configuring SpringDoc (already present in base-starter-parent of each service) to expose per-service /v3/api-docs endpoints routed through the gateway, aggregated into a single Swagger UI. A global CORS filter replaces per-service CORS configuration and allows the Next.js frontend origin.",
+  "labels": ["gateway", "spring-cloud-gateway", "api-gateway", "springdoc", "openapi", "infrastructure", "spring-cloud"],
+  "priority": "High",
+  "userType": "operations engineer",
+  "functionality": "route all client and frontend traffic through a single API entry point with JWT enforcement, path-based service routing, and a unified Swagger UI across all services",
+  "benefit": "the frontend has one stable base URL regardless of how many services exist, security enforcement is centralised at the edge, and developers can browse all service APIs in one place without running each service individually",
+  "stories": [
+    {
+      "summary": "api-gateway module bootstrapping and Consul-based service routing",
+      "description": "Create the Maven module <backend/api-gateway/> with spring-cloud-starter-gateway and spring-cloud-starter-consul-discovery. Configure path-based routes that follow the /api/v1/<service>/** convention and load-balance to each service using lb:// URIs resolved via Consul. Apply a RewritePath filter on routes where the service segment is not present in the downstream controller paths. Add the gateway container to <infra/docker/docker-compose.yml>. The gateway must be the only service binding to the external port; individual services should bind on internal ports only.\n\nRoute table:\n- /api/v1/users/** → lb://user-service, strip /users segment before forwarding\n- /api/v1/onboarding/** → lb://onboarding-service, forward path as-is\n- /api/v1/admin/** → lb://onboarding-service, forward path as-is\n- /api/v1/provisioning/** → lb://provisioning-service, strip /provisioning segment before forwarding",
+      "labels": ["gateway", "spring-cloud-gateway", "consul", "routing", "infrastructure"],
+      "priority": "High",
+      "storyPoints": 8,
+      "acceptanceCriteria": [
+        {
+          "scenario": "User service endpoints are reachable through the gateway",
+          "given": "the gateway and user-service are running and registered with Consul",
+          "when": "a client sends POST /api/v1/users/registrations to the gateway",
+          "then": "the request is forwarded to user-service as POST /api/v1/registrations and the response is returned to the client"
+        },
+        {
+          "scenario": "Onboarding service endpoints are reachable through the gateway",
+          "given": "the gateway and onboarding-service are running",
+          "when": "a client sends GET /api/v1/onboarding/{requestId} to the gateway",
+          "then": "the request is forwarded to onboarding-service at the same path without modification"
+        },
+        {
+          "scenario": "Unknown paths return 404",
+          "given": "the gateway is running",
+          "when": "a client requests a path that matches no configured route",
+          "then": "the gateway returns HTTP 404 with the standard error envelope"
+        },
+        {
+          "scenario": "Gateway starts and registers with Consul",
+          "given": "Consul and the gateway are running in Docker Compose",
+          "when": "the gateway application context initialises",
+          "then": "the gateway appears in the Consul service registry under the name api-gateway"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create api-gateway Maven module",
+          "description": "Add <backend/api-gateway/pom.xml> with parent xyz.catuns.spring:base-starter-parent. Include spring-cloud-starter-gateway (WebFlux-based), spring-cloud-starter-consul-discovery, and spring-boot-starter-actuator. Create the main application class at <backend/api-gateway/src/main/java/xyz/catuns/onboarding/gateway/ApiGatewayApplication.java>."
+        },
+        {
+          "summary": "Configure service routes in application.yml",
+          "description": "In <backend/api-gateway/src/main/resources/application.yml>, define spring.cloud.gateway.routes entries for user-service, onboarding-service, and provisioning-service. Use Path predicates and RewritePath filters following the /api/v1/<service>/** convention. Use lb://user-service, lb://onboarding-service, and lb://provisioning-service as URIs so Consul discovery is used for load balancing."
+        },
+        {
+          "summary": "Add api-gateway to Docker Compose",
+          "description": "In <infra/docker/docker-compose.yml>, add an api-gateway service that builds or pulls the gateway image, exposes port 8080 externally, and depends on consul. Move the external port bindings of user-service, onboarding-service, and provisioning-service to internal-only ports so all external traffic enters through the gateway."
+        },
+        {
+          "summary": "Add integration smoke test for route wiring",
+          "description": "Write a Spring Boot test in <backend/api-gateway/src/test/> using WebTestClient that mocks the downstream services and asserts that each route predicate forwards to the correct downstream URI with the correct path after any RewritePath filter is applied."
+        }
+      ]
+    },
+    {
+      "summary": "Centralized OpenAPI documentation aggregation via SpringDoc",
+      "description": "Configure the api-gateway to aggregate OpenAPI documentation from all three backend services into a single Swagger UI. Each service already exposes /v3/api-docs via the springdoc dependency inherited from base-starter-parent. Add springdoc-openapi-starter-webflux-ui to the gateway. Add dedicated gateway routes that proxy /v3/api-docs/user-service, /v3/api-docs/onboarding-service, and /v3/api-docs/provisioning-service to the corresponding service /v3/api-docs endpoints. Configure springdoc.swagger-ui.urls in <backend/api-gateway/src/main/resources/application.yml> to declare these three groups so the unified Swagger UI presents a service selector dropdown.",
+      "labels": ["springdoc", "openapi", "swagger-ui", "api-docs", "gateway"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Unified Swagger UI loads at the gateway",
+          "given": "the gateway and all three services are running",
+          "when": "a developer opens /swagger-ui.html on the gateway",
+          "then": "the Swagger UI page loads and shows a service selector with user-service, onboarding-service, and provisioning-service as selectable groups"
+        },
+        {
+          "scenario": "Service API docs are reachable through the gateway",
+          "given": "the gateway is running and user-service is registered with Consul",
+          "when": "a client requests GET /v3/api-docs/user-service on the gateway",
+          "then": "the gateway returns the OpenAPI JSON document produced by user-service"
+        },
+        {
+          "scenario": "Each service group displays its own endpoints",
+          "given": "the Swagger UI is open and onboarding-service is selected",
+          "when": "the UI loads the onboarding-service group",
+          "then": "only onboarding-service endpoints are shown, including GET /api/v1/onboarding/{requestId}"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add springdoc-openapi-starter-webflux-ui to the gateway pom",
+          "description": "In <backend/api-gateway/pom.xml>, add the org.springdoc:springdoc-openapi-starter-webflux-ui dependency. Use the version already managed by base-starter-parent if available, otherwise declare it explicitly. Do not add the servlet variant — the gateway uses WebFlux."
+        },
+        {
+          "summary": "Add /v3/api-docs proxy routes to application.yml",
+          "description": "In <backend/api-gateway/src/main/resources/application.yml>, add three gateway routes that forward GET /v3/api-docs/user-service, /v3/api-docs/onboarding-service, and /v3/api-docs/provisioning-service to the respective service /v3/api-docs path using a RewritePath filter. These routes must not require authentication."
+        },
+        {
+          "summary": "Configure springdoc swagger-ui.urls for gateway aggregation",
+          "description": "In <backend/api-gateway/src/main/resources/application.yml>, configure:\nspringdoc:\n  swagger-ui:\n    urls:\n      - name: user-service\n        url: /v3/api-docs/user-service\n      - name: onboarding-service\n        url: /v3/api-docs/onboarding-service\n      - name: provisioning-service\n        url: /v3/api-docs/provisioning-service\nAlso set springdoc.swagger-ui.disable-swagger-default-url: true."
+        },
+        {
+          "summary": "Annotate service controllers with @Tag and @Operation for richer docs",
+          "description": "Add @Tag annotations at controller class level in user-service and onboarding-service to group endpoints cleanly in the aggregated Swagger UI. Add @Operation(summary=...) to each public controller method. Do not change request/response shapes."
+        }
+      ]
+    },
+    {
+      "summary": "Global JWT authentication filter at the gateway edge",
+      "description": "Implement a Spring Cloud Gateway GlobalFilter that inspects the Authorization header on every inbound request, validates the bearer JWT using the shared key from jwt-spring-boot-starter, and either forwards the request with identity headers injected or returns HTTP 401 with the standard error envelope. Requests to actuator health, Swagger UI, and api-docs paths must bypass authentication. On successful validation, the filter must add X-User-Id and X-Correlation-Id headers before forwarding so downstream services can trust these values without re-validating the token.",
+      "labels": ["gateway", "jwt", "authentication", "security", "filter"],
+      "priority": "High",
+      "storyPoints": 3,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Authenticated request is forwarded with identity headers",
+          "given": "a client sends a request with a valid signed JWT in the Authorization header",
+          "when": "the gateway JWT filter processes the request",
+          "then": "the request is forwarded downstream with X-User-Id and X-Correlation-Id headers set from the token claims"
+        },
+        {
+          "scenario": "Request without a token is rejected at the gateway",
+          "given": "a client sends a request to /api/v1/users/me with no Authorization header",
+          "when": "the JWT filter evaluates the request",
+          "then": "the gateway returns HTTP 401 with the standard error envelope and the request is not forwarded to user-service"
+        },
+        {
+          "scenario": "Expired or malformed token returns 401",
+          "given": "a client sends a request with an expired or tampered JWT",
+          "when": "the JWT filter validates the token",
+          "then": "the gateway returns HTTP 401 and does not forward the request"
+        },
+        {
+          "scenario": "Health and documentation paths are accessible without authentication",
+          "given": "no Authorization header is present",
+          "when": "a client requests /actuator/health or /swagger-ui.html or /v3/api-docs/**",
+          "then": "the request is forwarded or served without an authentication check"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Implement JwtAuthenticationFilter as a GlobalFilter",
+          "description": "Create <backend/api-gateway/src/main/java/xyz/catuns/onboarding/gateway/filter/JwtAuthenticationFilter.java> implementing GlobalFilter and Ordered. Extract and validate the bearer JWT using the key configured via jwt-spring-boot-starter or a shared secret. Return Mono.error with a ResponseStatusException on failure. Use a configurable bypass list (default: /actuator/**, /swagger-ui/**, /v3/api-docs/**)."
+        },
+        {
+          "summary": "Inject X-User-Id and X-Correlation-Id headers on valid requests",
+          "description": "On successful JWT validation, mutate the ServerWebExchange request to add X-User-Id (from the sub or userId claim) and X-Correlation-Id (from the correlationId claim, or generate a UUID if absent). This allows downstream services to trust these headers without re-parsing the token."
+        },
+        {
+          "summary": "Configure bypass path list in application.yml",
+          "description": "Add a gateway.auth.bypass-paths property to <backend/api-gateway/src/main/resources/application.yml> listing paths that skip JWT validation. Bind this list to a @ConfigurationProperties class so it can be overridden per environment without code changes."
+        },
+        {
+          "summary": "Write unit tests for JwtAuthenticationFilter",
+          "description": "In <backend/api-gateway/src/test/>, write tests covering: valid token passes and headers are injected, missing Authorization returns 401, expired token returns 401, bypass path skips filter. Use MockServerWebExchange and a test JWT signed with the same key."
+        }
+      ]
+    },
+    {
+      "summary": "Global CORS configuration and correlation ID propagation",
+      "description": "Replace any per-service CORS configuration with a single gateway-level CORS policy that permits the Next.js frontend origin. Configure allowed origins, methods, and headers in <backend/api-gateway/src/main/resources/application.yml> using spring.cloud.gateway.globalcors. The gateway must also generate a X-Correlation-Id header if one is not already present on the request and propagate it in the response, consistent with the correlation ID propagation already in place across backend services.",
+      "labels": ["gateway", "cors", "correlation-id", "tracing", "infrastructure"],
+      "priority": "Medium",
+      "storyPoints": 2,
+      "acceptanceCriteria": [
+        {
+          "scenario": "CORS preflight succeeds from the frontend origin",
+          "given": "the Next.js frontend sends an OPTIONS preflight to the gateway with Origin: http://localhost:3000",
+          "when": "the gateway processes the preflight",
+          "then": "the response includes Access-Control-Allow-Origin: http://localhost:3000 and HTTP 200 is returned"
+        },
+        {
+          "scenario": "X-Correlation-Id is present on all responses",
+          "given": "a client sends a request without an X-Correlation-Id header",
+          "when": "the gateway processes and forwards the request",
+          "then": "the response contains an X-Correlation-Id header with a generated UUID"
+        },
+        {
+          "scenario": "Existing X-Correlation-Id is preserved end to end",
+          "given": "a client sends a request that already includes X-Correlation-Id",
+          "when": "the gateway forwards the request",
+          "then": "the same X-Correlation-Id value appears on the downstream request and on the response"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Configure global CORS in application.yml",
+          "description": "In <backend/api-gateway/src/main/resources/application.yml>, add spring.cloud.gateway.globalcors configuration with allowedOrigins (parameterised per environment via ${FRONTEND_ORIGIN:http://localhost:3000}), allowedMethods: [GET, POST, PUT, DELETE, OPTIONS], allowedHeaders: [*], and allowCredentials: true. Remove any WebMvcConfigurer CORS beans from individual services."
+        },
+        {
+          "summary": "Add correlation ID propagation filter",
+          "description": "Create a GlobalFilter that checks for an incoming X-Correlation-Id header. If absent, generate a UUID and add it to both the forwarded request and the response. If present, pass it through unchanged. This ensures every response carries a traceable identifier regardless of whether the client supplied one."
+        }
+      ]
+    }
+  ]
+}
