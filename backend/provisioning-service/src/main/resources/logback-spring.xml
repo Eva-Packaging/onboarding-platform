@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="user-service"/>
+    <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="provisioning-service"/>
 
     <!-- dev / local: human-readable with key MDC fields highlighted -->
     <springProfile name="dev | local">
