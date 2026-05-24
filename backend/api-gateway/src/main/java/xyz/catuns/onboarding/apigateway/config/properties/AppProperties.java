@@ -6,8 +6,8 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
 import xyz.catuns.spring.base.properties.OpenApiProperties;
 import xyz.catuns.spring.base.properties.OpenFeignProperties;
 
-@ConfigurationProperties(prefix = "app")
 @Data
+@ConfigurationProperties(prefix = "app")
 public class AppProperties {
 
     @NestedConfigurationProperty

@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Configuration;
 import xyz.catuns.onboarding.apigateway.config.properties.AppProperties;
 
 @Configuration
-@EnableConfigurationProperties(AppProperties.class)
+@EnableConfigurationProperties({AppProperties.class})
 class AppConfig {
 
     @Bean
