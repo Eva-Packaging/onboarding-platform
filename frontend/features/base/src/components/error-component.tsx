@@ -1,8 +1,8 @@
 import { toast } from 'sonner';
-import type { ErrorMessage } from '../lib/axios/types';
+import type { ProblemDetail } from '@next-feature/client';
 
 interface Props {
-  error: ErrorMessage | undefined;
+  error: ProblemDetail | undefined;
 }
 
 export function ErrorComponent(props: Props) {
@@ -14,21 +14,21 @@ export function ErrorComponent(props: Props) {
         <strong>BACKEND SERVER ERROR</strong>
       </h1>
       <span>
-        <strong>statusCode</strong>: {props.error?.statusCode}
+        <strong>statusCode</strong>: {props.error?.status}
       </span>
       <span>
-        <strong>path</strong>: {props.error?.path}
+        <strong>path</strong>: {props.error?.instance}
       </span>
       <span>
-        <strong>message</strong>: {props.error?.message}
+        <strong>message</strong>: {props.error?.detail}
       </span>
       <span>
-        <strong>timestamp</strong>: {props.error?.timestamp.toString()}
+        <strong>timestamp</strong>: {Date.now()}
       </span>
     </div>
   );
 }
 
-export function withToast(error: ErrorMessage) {
+export function withToast(error: ProblemDetail) {
   toast.error(<ErrorComponent error={error} />);
 }

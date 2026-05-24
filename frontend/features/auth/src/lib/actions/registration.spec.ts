@@ -77,12 +77,12 @@ describe('registerUserSchema', () => {
 });
 
 describe('registerUser', () => {
-  it('posts to /api/v1/registrations and returns the response', async () => {
+  it('posts to /api/v1/users/registrations and returns the response', async () => {
     mockPost.mockResolvedValue(mockResponse);
 
     const result = await registerUser(validPayload);
 
-    expect(mockPost).toHaveBeenCalledWith('/api/v1/registrations', validPayload);
+    expect(mockPost).toHaveBeenCalledWith('/api/v1/users/registrations', validPayload);
     expect(result).toEqual(mockResponse);
   });
 
@@ -98,7 +98,7 @@ describe('registerUser', () => {
 
     await registerUser(payload);
 
-    expect(mockPost).toHaveBeenCalledWith('/api/v1/registrations', payload);
+    expect(mockPost).toHaveBeenCalledWith('/api/v1/users/registrations', payload);
   });
 
   it('throws when schema validation fails', async () => {

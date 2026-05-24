@@ -52,6 +52,10 @@ spring:
             trusted:
               packages: xyz.catuns.onboarding.service.*
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    template:
+      observation-enabled: true
+    listener:
+      observation-enabled: true
   profiles:
     active: dev
   jpa:
@@ -68,15 +72,23 @@ management:
     health:
       probes:
         enabled: true
+    prometheus:
+      enabled: true
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,prometheus
   health:
     liveness-state:
       enabled: true
     readiness-state:
       enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
 jwt:
   secret: ${JWT_SECRET}
   issuer: ${spring.application.name}

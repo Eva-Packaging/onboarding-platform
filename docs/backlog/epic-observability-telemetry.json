@@ -1,0 +1,307 @@
+{
+  "summary": "Observability, Telemetry and Logging Foundation",
+  "description": "Establish end-to-end observability across all backend microservices and the Next.js frontend. Covers distributed tracing via Micrometer Tracing and Zipkin, Prometheus metrics scraping with custom business counters, structured JSON logging enriched with MDC fields (traceId, spanId, correlationId, userId), Kafka trace context propagation via B3 headers, and structured client/server logging in Next.js via Pino. Local infrastructure (Zipkin, Prometheus, Grafana) is added to the docker-compose stack.",
+  "labels": ["observability", "telemetry", "tracing", "metrics", "logging", "zipkin", "prometheus", "pino"],
+  "priority": "High",
+  "userType": "operations engineer",
+  "functionality": "inspect distributed traces across all services, query Prometheus metrics, and correlate structured log lines end-to-end using traceId and correlationId",
+  "benefit": "detect failures, diagnose latency in the onboarding pipeline, and support production incident investigation without ad-hoc debugging",
+  "stories": [
+    {
+      "summary": "Add Micrometer Tracing and Zipkin reporter to all backend services",
+      "description": "Add distributed tracing to all four Spring Boot services using Micrometer Tracing with the Brave/Zipkin bridge. Each service exports spans to Zipkin. The existing X-Correlation-ID is bridged into Brave baggage so correlation IDs appear on every span. The api-gateway uses the WebFlux/reactive variant with reactor context propagation.\n\nAffected services: <backend/user-service>, <backend/onboarding-service>, <backend/provisioning-service>, <backend/api-gateway>\n\nDependencies to add to each pom.xml:\n```\n<dependency>\n  <groupId>io.micrometer</groupId>\n  <artifactId>micrometer-tracing-bridge-brave</artifactId>\n</dependency>\n<dependency>\n  <groupId>io.zipkin.reporter2</groupId>\n  <artifactId>zipkin-reporter-brave</artifactId>\n</dependency>\n```\n\nApplication config to add:\n```\nmanagement.zipkin.tracing.endpoint=http://localhost:9411/api/v2/spans\nmanagement.tracing.sampling.probability=1.0\n```",
+      "labels": ["tracing", "zipkin", "micrometer", "backend"],
+      "priority": "High",
+      "storyPoints": 8,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Spans appear in Zipkin for a registration request",
+          "given": "a running Zipkin instance and all four services started with tracing configured",
+          "when": "a POST /api/v1/registrations request flows through the api-gateway to user-service",
+          "then": "a trace with child spans for api-gateway and user-service is visible in the Zipkin UI with the correct correlationId as a baggage field"
+        },
+        {
+          "scenario": "Existing X-Correlation-ID is preserved in trace baggage",
+          "given": "a client request carrying an X-Correlation-ID header",
+          "when": "the request is processed by any service",
+          "then": "the correlationId baggage value on the resulting span matches the inbound X-Correlation-ID header"
+        },
+        {
+          "scenario": "api-gateway reactive context propagates trace",
+          "given": "the api-gateway processes a proxied request reactively",
+          "when": "the downstream service receives the forwarded request",
+          "then": "the B3 trace headers are present and the downstream span is a child of the gateway span"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add micrometer-tracing-bridge-brave and zipkin-reporter-brave to all four pom.xml files",
+          "description": "Add the Brave bridge and Zipkin reporter dependencies to <backend/user-service/pom.xml>, <backend/onboarding-service/pom.xml>, <backend/provisioning-service/pom.xml>, and <backend/api-gateway/pom.xml>."
+        },
+        {
+          "summary": "Configure Zipkin exporter endpoint in each application.yml",
+          "description": "Add management.zipkin.tracing.endpoint and management.tracing.sampling.probability=1.0 to each service's <application.yml>. Use an environment variable override for non-local environments."
+        },
+        {
+          "summary": "Bridge X-Correlation-ID into Brave baggage",
+          "description": "In each service's correlation ID servlet filter (or gateway filter for api-gateway), write the correlationId into a Brave baggage field using BaggageField so it propagates with every outbound span."
+        },
+        {
+          "summary": "Verify reactor context propagation in api-gateway",
+          "description": "Confirm that micrometer-tracing reactor context hooks are active in the api-gateway WebFlux application and that child spans are created correctly for proxied routes."
+        },
+        {
+          "summary": "Add unit and integration tests for trace propagation",
+          "description": "Add tests verifying that B3 headers are forwarded by Feign interceptors and that the correlationId baggage field is populated on outbound calls."
+        }
+      ]
+    },
+    {
+      "summary": "Expose Prometheus metrics endpoint on all backend services",
+      "description": "Add the Micrometer Prometheus registry to all four services so that Prometheus can scrape the /actuator/prometheus endpoint. Expose standard Spring Boot metrics (JVM, HTTP, Kafka, datasource) and add custom business counters for registration requests, onboarding step failures, and provisioning outcomes.\n\nDependency to add to each pom.xml:\n```\n<dependency>\n  <groupId>io.micrometer</groupId>\n  <artifactId>micrometer-registry-prometheus</artifactId>\n</dependency>\n```\n\nActuator config:\n```\nmanagement.endpoints.web.exposure.include=health,info,prometheus,metrics\nmanagement.endpoint.prometheus.enabled=true\n```",
+      "labels": ["metrics", "prometheus", "micrometer", "actuator", "backend"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Prometheus endpoint is reachable and returns metrics",
+          "given": "a running service with micrometer-registry-prometheus configured",
+          "when": "GET /actuator/prometheus is called",
+          "then": "the response is HTTP 200 with content-type text/plain and contains standard JVM and HTTP server metrics"
+        },
+        {
+          "scenario": "Custom registration counter increments on each registration",
+          "given": "the user-service is running with a custom counter named onboarding_registrations_total",
+          "when": "a successful POST /api/v1/registrations is processed",
+          "then": "the counter value increments by 1 and is visible in the /actuator/prometheus scrape output"
+        },
+        {
+          "scenario": "Onboarding step failure counter increments on failed steps",
+          "given": "the onboarding-service has a custom counter named onboarding_step_failures_total tagged with step_type",
+          "when": "an onboarding step transitions to FAILED state",
+          "then": "the counter increments and the step_type tag reflects the failed step"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add micrometer-registry-prometheus to all four pom.xml files",
+          "description": "Add the Prometheus registry dependency to <backend/user-service/pom.xml>, <backend/onboarding-service/pom.xml>, <backend/provisioning-service/pom.xml>, and <backend/api-gateway/pom.xml>."
+        },
+        {
+          "summary": "Configure actuator to expose the prometheus endpoint in each application.yml",
+          "description": "Set management.endpoints.web.exposure.include to include prometheus and configure management.endpoint.prometheus.enabled=true in each service's <application.yml>."
+        },
+        {
+          "summary": "Add custom business counters in user-service and onboarding-service",
+          "description": "Register a MeterRegistry counter onboarding_registrations_total in user-service and onboarding_step_failures_total (tagged by step_type) and provisioning_outcomes_total (tagged by provider and result) in onboarding-service and provisioning-service."
+        },
+        {
+          "summary": "Add tests verifying counter increments",
+          "description": "Use SimpleMeterRegistry in unit tests to assert that registration and step-failure counters increment correctly on the relevant service method calls."
+        }
+      ]
+    },
+    {
+      "summary": "Structured JSON logging with MDC enrichment across all backend services",
+      "description": "Replace the default Logback pattern layout with a JSON encoder using logstash-logback-encoder. Every log line includes standard fields plus MDC context: traceId, spanId, correlationId, userId, and service name. The existing correlation ID servlet/gateway filter already writes correlationId to MDC; this story adds the remaining fields and the JSON encoder.\n\nDependency to add to each pom.xml:\n```\n<dependency>\n  <groupId>net.logstash.logback</groupId>\n  <artifactId>logstash-logback-encoder</artifactId>\n  <version>8.0</version>\n</dependency>\n```\n\nAffected config files: <backend/user-service/src/main/resources/logback-spring.xml>, and equivalents in each other service.",
+      "labels": ["logging", "structured-logs", "logback", "mdc", "backend"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Log lines are emitted as JSON",
+          "given": "a service configured with logstash-logback-encoder",
+          "when": "any log statement is executed",
+          "then": "the output is a single-line JSON object containing level, message, logger, timestamp, and thread fields"
+        },
+        {
+          "scenario": "Trace context fields appear on every log line during a request",
+          "given": "Micrometer Tracing is active and a request is being processed",
+          "when": "any logger within the request thread emits a log statement",
+          "then": "the JSON log line includes non-empty traceId, spanId, and correlationId fields matching the active trace"
+        },
+        {
+          "scenario": "userId is present on authenticated request log lines",
+          "given": "a JWT-authenticated request is processed by user-service or onboarding-service",
+          "when": "a service method logs during that request",
+          "then": "the JSON log line includes a userId field populated from the JWT subject claim"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add logstash-logback-encoder dependency to all four pom.xml files",
+          "description": "Add net.logstash.logback:logstash-logback-encoder version 8.0 to each service's pom.xml."
+        },
+        {
+          "summary": "Create logback-spring.xml with LogstashEncoder in each service",
+          "description": "Add or replace <backend/{service}/src/main/resources/logback-spring.xml> with a configuration using LogstashEncoder. Include a dev profile that uses pretty-print and a prod profile that emits raw JSON."
+        },
+        {
+          "summary": "Enrich correlation ID servlet filter to write traceId, spanId, and userId to MDC",
+          "description": "Update each service's correlation ID filter to also set traceId and spanId MDC keys from the active Brave span (via Tracer.currentSpan()) and userId from the Spring Security context."
+        },
+        {
+          "summary": "Add service name as a static MDC field",
+          "description": "Configure each service's logback-spring.xml to include a static service field using the spring.application.name property so log lines are identifiable across aggregated log streams."
+        },
+        {
+          "summary": "Add tests verifying MDC fields are present in log output",
+          "description": "Write integration tests using a captured log appender to assert that traceId, correlationId, and service fields are non-empty on log lines emitted during a request."
+        }
+      ]
+    },
+    {
+      "summary": "Kafka trace context propagation and consumer metrics",
+      "description": "Instrument Kafka producers and consumers with Micrometer Tracing so that trace context (B3 headers) is injected into Kafka record headers by producers and extracted by consumers, creating parent-child span relationships across async boundaries. Also enable Kafka consumer lag metrics via KafkaConsumerMetrics so Prometheus can alert on processing backlogs.\n\nThis builds on the Micrometer Brave bridge added in the tracing story. Spring Kafka 3.x + Micrometer auto-configures the ObservationRegistry on KafkaTemplate and listener containers when micrometer-tracing is on the classpath.",
+      "labels": ["kafka", "tracing", "metrics", "observability", "backend"],
+      "priority": "Medium",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Kafka consumer span is a child of the producer span",
+          "given": "Micrometer Tracing is active on both user-service (producer) and onboarding-service (consumer)",
+          "when": "user-service publishes a UserRegisteredV1 event and onboarding-service processes it",
+          "then": "the consumer span in Zipkin has the producer span as its parent, forming a single end-to-end trace"
+        },
+        {
+          "scenario": "Consumer lag metric is available in Prometheus",
+          "given": "KafkaConsumerMetrics is registered on the MeterRegistry for onboarding-service",
+          "when": "GET /actuator/prometheus is called on onboarding-service",
+          "then": "kafka_consumer_fetch_manager_records_lag metrics are present for each topic partition"
+        },
+        {
+          "scenario": "Correlation ID is preserved across the Kafka boundary",
+          "given": "a request with a known X-Correlation-ID triggers an outbox event publication",
+          "when": "the consumer processes the Kafka message",
+          "then": "the consumer's MDC correlationId matches the value set by the original request"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Enable KafkaTemplate observation in user-service, onboarding-service, and provisioning-service",
+          "description": "Set spring.kafka.template.observation-enabled=true and spring.kafka.listener.observation-enabled=true in each service's <application.yml> to activate Micrometer tracing on Kafka producers and consumers."
+        },
+        {
+          "summary": "Register KafkaConsumerMetrics bean in each Kafka consumer service",
+          "description": "Add a KafkaConsumerMetrics bean wired to the MeterRegistry in onboarding-service and provisioning-service so consumer lag and offset metrics are exported to Prometheus."
+        },
+        {
+          "summary": "Propagate correlationId into Kafka record headers via outbox publisher",
+          "description": "Update the outbox event publisher in each service to read the correlationId from MDC and write it as a Kafka record header, so consumers can restore it when processing the message."
+        },
+        {
+          "summary": "Add integration tests for cross-service trace propagation via Kafka",
+          "description": "Add a TestContainers-based integration test that publishes an event on one service and asserts that the consumer span shares the same traceId as the producer span."
+        }
+      ]
+    },
+    {
+      "summary": "Add Zipkin, Prometheus, and Grafana to local docker-compose stack",
+      "description": "Extend <infra/docker/docker-compose.yml> with three new services: Zipkin (trace collector and UI), Prometheus (metrics scraper), and Grafana (dashboards). Add a <infra/docker/prometheus.yml> scrape config targeting the /actuator/prometheus endpoint of all four backend services. Include a starter Grafana dashboard provisioning config for JVM and HTTP metrics.\n\nPort assignments (avoiding conflicts with Schema Registry on 9090):\n- Zipkin: 9411\n- Prometheus: 9093\n- Grafana: 3001",
+      "labels": ["infrastructure", "docker-compose", "zipkin", "prometheus", "grafana", "local-dev"],
+      "priority": "High",
+      "storyPoints": 3,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Zipkin UI is accessible after docker-compose up",
+          "given": "the full docker-compose stack is started",
+          "when": "a browser opens http://localhost:9411",
+          "then": "the Zipkin search UI loads and accepts trace queries"
+        },
+        {
+          "scenario": "Prometheus scrapes all four backend services",
+          "given": "all backend services and Prometheus are running",
+          "when": "the Prometheus targets page at http://localhost:9093/targets is opened",
+          "then": "all four service scrape targets show state UP"
+        },
+        {
+          "scenario": "Grafana Prometheus datasource is pre-configured",
+          "given": "Grafana starts with the provisioning config",
+          "when": "a user opens http://localhost:3001",
+          "then": "a Prometheus datasource pointing to http://prometheus:9093 is available without manual configuration"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add Zipkin service to docker-compose.yml",
+          "description": "Add openzipkin/zipkin:3 container with port 9411:9411 to <infra/docker/docker-compose.yml>."
+        },
+        {
+          "summary": "Add Prometheus service and scrape config to docker-compose.yml",
+          "description": "Add prom/prometheus container on port 9093:9090 and mount a <infra/docker/prometheus.yml> scrape config that targets all four backend services at their actuator prometheus endpoints."
+        },
+        {
+          "summary": "Add Grafana service with Prometheus datasource provisioning",
+          "description": "Add grafana/grafana container on port 3001:3000 with volume-mounted datasource and dashboard provisioning configs under <infra/docker/grafana/>."
+        },
+        {
+          "summary": "Update infra/.env.example with new service URLs",
+          "description": "Add ZIPKIN_ENDPOINT, PROMETHEUS_URL, and GRAFANA_URL entries to <infra/docker/.env.example> so developers can override them for non-local environments."
+        },
+        {
+          "summary": "Update README or CLAUDE.md local infrastructure table",
+          "description": "Add Zipkin (9411), Prometheus (9093), and Grafana (3001) rows to the local infrastructure reference table in the project docs."
+        }
+      ]
+    },
+    {
+      "summary": "Structured logging in Next.js frontend with Pino",
+      "description": "Add structured logging to the Next.js frontend using Pino. Server-side request/response logging uses pino-http as middleware in the Next.js server instrumentation file. Client-side uncaught errors and key navigation events use the pino/browser build. All log lines include the X-Correlation-ID forwarded from the backend response or generated client-side. In development, pino-pretty formats output for readability.\n\nAffected area: <frontend/apps/web>",
+      "labels": ["logging", "pino", "frontend", "nextjs", "observability"],
+      "priority": "Medium",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Server-side requests are logged as structured JSON",
+          "given": "the Next.js app is running in production mode",
+          "when": "an HTTP request is handled by the Next.js server",
+          "then": "a single-line JSON log line is emitted containing method, url, statusCode, responseTime, and correlationId"
+        },
+        {
+          "scenario": "Client-side unhandled errors are captured and logged",
+          "given": "the pino browser logger is initialized with an error boundary or window.onerror hook",
+          "when": "an unhandled JavaScript error occurs in the browser",
+          "then": "a structured log event with level error, message, stack, and correlationId is captured and forwarded to the server log endpoint or console"
+        },
+        {
+          "scenario": "Correlation ID flows from backend response into client log lines",
+          "given": "the backend returns an X-Correlation-ID response header on API calls",
+          "when": "subsequent client-side log events are emitted for that user session",
+          "then": "the correlationId field in those log lines matches the value from the backend response header"
+        },
+        {
+          "scenario": "Pretty-printed logs appear in development",
+          "given": "NODE_ENV=development and pino-pretty is installed",
+          "when": "the dev server handles a request",
+          "then": "server log output is human-readable and colour-coded rather than raw JSON"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add pino, pino-http, and pino-pretty to frontend/apps/web",
+          "description": "Run pnpm add pino pino-http and pnpm add -D pino-pretty inside <frontend/apps/web>."
+        },
+        {
+          "summary": "Create a server logger module using pino with environment-aware transport",
+          "description": "Add <frontend/apps/web/lib/logger/server.ts> that exports a pino instance configured with pino-pretty in development and raw JSON in production. Include a default service field set to web."
+        },
+        {
+          "summary": "Wire pino-http middleware in Next.js instrumentation",
+          "description": "Create or update <frontend/apps/web/instrumentation.ts> to register pino-http as a request logger for the Node.js server runtime, capturing method, url, statusCode, responseTime, and correlationId."
+        },
+        {
+          "summary": "Create a browser logger module using pino/browser",
+          "description": "Add <frontend/apps/web/lib/logger/client.ts> using the pino/browser export with a transmit handler that POSTs log events to a /api/log endpoint for server-side aggregation."
+        },
+        {
+          "summary": "Capture client-side unhandled errors and route them through the browser logger",
+          "description": "Add a global error boundary component and a window.onerror/unhandledrejection hook in the root layout that feeds errors into the browser logger with correlationId context."
+        },
+        {
+          "summary": "Extract and store correlationId from backend API responses into logger context",
+          "description": "Update the frontend API client in <frontend/apps/web/lib> to read the X-Correlation-ID response header and store it in a request-scoped context that the browser logger reads for each log event."
+        }
+      ]
+    }
+  ]
+}

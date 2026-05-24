@@ -74,12 +74,15 @@ docker compose -f infra/docker/docker-compose.yml down
 cp infra/docker/.env.example infra/docker/.env
 ```
 
-| Component | Port | Notes |
-|---|---|---|
-| PostgreSQL 17 | 5432 | Auto-creates `user_service`, `onboarding_service`, `provisioning_service` DBs |
-| Kafka (KRaft) | 9092 | Confluent CP 8.2.0 |
-| Schema Registry | 9090 | Backward compatibility enforced |
-| Consul | 8500 | Service discovery; api-gateway routes via Consul |
+| Component       | Port | Notes                                                                         |
+|-----------------|------|-------------------------------------------------------------------------------|
+| PostgreSQL 17   | 5432 | Auto-creates `user_service`, `onboarding_service`, `provisioning_service` DBs |
+| Kafka (KRaft)   | 9092 | Confluent CP 8.2.0                                                            |
+| Schema Registry | 9090 | Backward compatibility enforced                                               |
+| Consul          | 8500 | Service discovery; api-gateway routes via Consul                              |
+| Zipkin          | 9411 | Distributed trace collector and UI                                            |
+| Prometheus      | 9093 | Metrics scraper; scrapes `/actuator/prometheus` on all 4 services             |
+| Grafana         | 3001 | Dashboards; Prometheus datasource pre-wired; default login admin/admin        |
 
 Each Spring Boot service connects to its own database. Services register with Consul on startup; the api-gateway resolves routes dynamically from Consul discovery.
 
@@ -87,12 +90,12 @@ Each Spring Boot service connects to its own database. Services register with Co
 
 ### Service boundaries and data ownership
 
-| Service | Owns tables | Produces events | Exposes |
-|---|---|---|---|
-| `user-service` | `user_profile`, `external_identity`, `outbox_event` | `UserRegisteredV1` | `POST /api/v1/registrations`, `GET /api/v1/me` |
-| `onboarding-service` | `onboarding_request`, `onboarding_step`, `outbox_event` | provisioning request events, lifecycle events | status, retry, admin, identity APIs |
-| `provisioning-service` | `provisioning_audit_log`, `outbox_event` | provisioning completion events | provider health |
-| `api-gateway` | — | — | Unified entry point; Spring Cloud Gateway + Resilience4j circuit breaker |
+| Service                | Owns tables                                             | Produces events                               | Exposes                                                                  |
+|------------------------|---------------------------------------------------------|-----------------------------------------------|--------------------------------------------------------------------------|
+| `user-service`         | `user_profile`, `external_identity`, `outbox_event`     | `UserRegisteredV1`                            | `POST /api/v1/registrations`, `GET /api/v1/me`                           |
+| `onboarding-service`   | `onboarding_request`, `onboarding_step`, `outbox_event` | provisioning request events, lifecycle events | status, retry, admin, identity APIs                                      |
+| `provisioning-service` | `provisioning_audit_log`, `outbox_event`                | provisioning completion events                | provider health                                                          |
+| `api-gateway`          | —                                                       | —                                             | Unified entry point; Spring Cloud Gateway + Resilience4j circuit breaker |
 
 ### Request flow (happy path)
 

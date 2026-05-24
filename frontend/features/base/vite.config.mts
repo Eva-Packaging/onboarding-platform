@@ -6,6 +6,7 @@ import * as path from 'path';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
 
+// @ts-ignore
 export default defineConfig(() => ({
   root: import.meta.dirname,
   cacheDir: '../../node_modules/.vite/features/base',
@@ -35,7 +36,7 @@ export default defineConfig(() => ({
     lib: {
       // Could also be a dictionary or array of multiple entry points.
       entry: {
-        index: 'src/schema.ts',
+        index: 'src/index.ts',
         server: 'src/server.ts',
       },
       name: 'base',

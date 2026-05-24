@@ -1,6 +1,7 @@
 import './global.css';
 import Providers from './providers';
 import { Layout } from '../components/layout';
+import GlobalErrorHandler from '../components/providers/GlobalErrorHandler';
 import { ReactNode } from 'react';
 
 export const metadata = {
@@ -17,6 +18,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <Providers>
+          <GlobalErrorHandler />
           <Layout>
             {children}
           </Layout>

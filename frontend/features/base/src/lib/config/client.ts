@@ -42,6 +42,23 @@ apiClient.axios.defaults.headers.common['User-Agent'] = [
 ].join(':');
 apiClient.axios.defaults.headers.common['Content-Type'] = 'application/json';
 
+// Capture the backend's X-Correlation-ID into sessionStorage so the browser
+// logger (apps/web) can read it without a cross-package import.
+// Guard prevents execution on the server (server actions share this module).
+if (typeof window !== 'undefined') {
+  apiClient.axios.interceptors.response.use((response) => {
+    const correlationId = response.headers['x-correlation-id'];
+    if (correlationId) {
+      try {
+        sessionStorage.setItem('correlation_id', correlationId);
+      } catch {
+        // ignore quota / private-browsing errors
+      }
+    }
+    return response;
+  });
+}
+
 /**
  * Example: Override request interceptor
  */

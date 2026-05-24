@@ -2,6 +2,7 @@ package xyz.catuns.onboarding.service.domain;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
@@ -25,6 +26,9 @@ class OnboardingDomainServiceTest {
 
     @Autowired
     OnboardingDomainService domainService;
+
+    @Autowired
+    MeterRegistry meterRegistry;
 
     @Autowired
     OnboardingRequestRepository requestRepository;
@@ -139,6 +143,38 @@ class OnboardingDomainServiceTest {
 
         assertThatThrownBy(() -> domainService.transitionStep(step, OnboardingStepState.PROCESSING))
             .isInstanceOf(IllegalStateTransitionException.class);
+    }
+
+    @Test
+    void transitionStep_toFailed_incrementsStepFailureCounter() {
+        domainService.startRequest(request);
+        OnboardingStep step = stepRepository.save(buildStep(identityType));
+        domainService.transitionStep(step, OnboardingStepState.PROCESSING);
+
+        double before = meterRegistry.counter("onboarding.step.failures",
+            "step_type", StepType.IDENTITY_CORRELATION.name()).count();
+
+        domainService.transitionStep(step, OnboardingStepState.FAILED);
+
+        assertThat(meterRegistry.counter("onboarding.step.failures",
+            "step_type", StepType.IDENTITY_CORRELATION.name()).count())
+            .isEqualTo(before + 1);
+    }
+
+    @Test
+    void transitionStep_toSucceeded_doesNotIncrementFailureCounter() {
+        domainService.startRequest(request);
+        OnboardingStep step = stepRepository.save(buildStep(identityType));
+        domainService.transitionStep(step, OnboardingStepState.PROCESSING);
+
+        double before = meterRegistry.counter("onboarding.step.failures",
+            "step_type", StepType.IDENTITY_CORRELATION.name()).count();
+
+        domainService.transitionStep(step, OnboardingStepState.SUCCEEDED);
+
+        assertThat(meterRegistry.counter("onboarding.step.failures",
+            "step_type", StepType.IDENTITY_CORRELATION.name()).count())
+            .isEqualTo(before);
     }
 
     private OnboardingRequest buildRequest() {

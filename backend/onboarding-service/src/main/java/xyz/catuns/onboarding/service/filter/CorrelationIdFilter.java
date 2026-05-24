@@ -1,5 +1,7 @@
 package xyz.catuns.onboarding.service.filter;
 
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,11 +17,17 @@ import java.io.IOException;
 import java.util.UUID;
 
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
+@Order(Ordered.HIGHEST_PRECEDENCE + 2)
 public class CorrelationIdFilter extends OncePerRequestFilter {
 
     static final String CORRELATION_ID_HEADER = "X-Correlation-ID";
     static final String MDC_KEY = "correlationId";
+
+    private final Tracer tracer;
+
+    public CorrelationIdFilter(Tracer tracer) {
+        this.tracer = tracer;
+    }
 
     @Override
     protected void doFilterInternal(
@@ -30,6 +38,10 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
         String correlationId = request.getHeader(CORRELATION_ID_HEADER);
         if (correlationId == null || correlationId.isBlank()) {
             correlationId = UUID.randomUUID().toString();
+        }
+        Span currentSpan = tracer.currentSpan();
+        if (currentSpan != null) {
+            currentSpan.tag("correlationId", correlationId);
         }
         try {
             MDC.put(MDC_KEY, correlationId);
