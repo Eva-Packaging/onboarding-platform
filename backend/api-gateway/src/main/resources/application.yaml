@@ -1,0 +1,134 @@
+app:
+  open-api:
+    description: @project.description@
+    title: @project.name@
+    version: @project.version@
+spring:
+  cloud:
+    consul:
+      port: 8500
+      discovery:
+        instance-id: ${spring.application.name}:${random.value}
+        prefer-ip-address: true
+      host: localhost
+    gateway:
+      server:
+        webflux:
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowedOrigins: "${FRONTEND_ORIGIN:http://localhost:3000}"
+                allowedMethods:
+                  - GET
+                  - POST
+                  - PUT
+                  - DELETE
+                  - OPTIONS
+                allowedHeaders:
+                  - "*"
+                allowCredentials: true
+          discovery:
+            locator:
+              lower-case-service-id: true
+              enabled: true
+          routes:
+            - id: user-service
+              uri: lb://user-service
+              predicates:
+                - Path=/api/v1/users/**
+              filters:
+                - RewritePath=/api/v1/users/(?<segment>.*), /api/v1/$\{segment}
+            - id: onboarding-service
+              uri: lb://onboarding-service
+              predicates:
+                - Path=/api/v1/onboarding/**
+            - id: admin-to-onboarding
+              uri: lb://onboarding-service
+              predicates:
+                - Path=/api/v1/admin/**
+            - id: provisioning-service
+              uri: lb://provisioning-service
+              predicates:
+                - Path=/api/v1/provisioning/**
+              filters:
+                - RewritePath=/api/v1/provisioning/(?<segment>.*), /api/v1/$\{segment}
+
+            # Docs UI — redirect to aggregated Swagger UI with service pre-selected
+            - id: docs-ui-user-service
+              uri: http://localhost
+              predicates:
+                - Path=/api/v1/docs/user-service
+              filters:
+                - RedirectTo=302, /swagger-ui/index.html?urls.primaryName=user-service
+            - id: docs-ui-onboarding-service
+              uri: http://localhost
+              predicates:
+                - Path=/api/v1/docs/onboarding-service
+              filters:
+                - RedirectTo=302, /swagger-ui/index.html?urls.primaryName=onboarding-service
+            - id: docs-ui-provisioning-service
+              uri: http://localhost
+              predicates:
+                - Path=/api/v1/docs/provisioning-service
+              filters:
+                - RedirectTo=302, /swagger-ui/index.html?urls.primaryName=provisioning-service
+
+            # API Docs
+            - id: api-docs-user-service
+              uri: lb://user-service
+              predicates:
+                - Path=/v3/api-docs/user-service
+              filters:
+                - RewritePath=/v3/api-docs/user-service, /v3/api-docs
+            - id: api-docs-onboarding-service
+              uri: lb://onboarding-service
+              predicates:
+                - Path=/v3/api-docs/onboarding-service
+              filters:
+                - RewritePath=/v3/api-docs/onboarding-service, /v3/api-docs
+            - id: api-docs-provisioning-service
+              uri: lb://provisioning-service
+              predicates:
+                - Path=/v3/api-docs/provisioning-service
+              filters:
+                - RewritePath=/v3/api-docs/provisioning-service, /v3/api-docs
+  application:
+    name: api-gateway
+  profiles:
+    active: dev
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health
+  health:
+    liveness-state:
+      enabled: true
+    readiness-state:
+      enabled: true
+springdoc:
+  swagger-ui:
+    disable-swagger-default-url: true
+    urls:
+      - name: user-service
+        url: /v3/api-docs/user-service
+      - name: onboarding-service
+        url: /v3/api-docs/onboarding-service
+      - name: provisioning-service
+        url: /v3/api-docs/provisioning-service
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10
+        permitted-number-of-calls-in-half-open-state: 3
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10000
+jwt:
+  secret: ${JWT_SECRET}
+  issuer: ${spring.application.name}
+  public-paths: /swagger-ui/**, /v3/api-docs/**, /actuator/**, /error/**, /api/v1/docs/**
