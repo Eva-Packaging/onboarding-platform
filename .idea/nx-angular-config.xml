@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="NxAngularConfigService" workspaceLocation="file://$PROJECT_DIR$/frontend/nx.json">
+    <projects>
+      <project name="@onboarding-frontend/source" file="file://$PROJECT_DIR$/frontend/project.json" />
+      <project name="auth" file="file://$PROJECT_DIR$/frontend/features/auth/project.json" />
+      <project name="base" file="file://$PROJECT_DIR$/frontend/features/base/project.json" />
+      <project name="web" file="file://$PROJECT_DIR$/frontend/apps/web/project.json" />
+    </projects>
+  </component>
+</project>
