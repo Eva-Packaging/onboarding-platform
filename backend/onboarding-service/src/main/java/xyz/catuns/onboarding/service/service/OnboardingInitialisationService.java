@@ -4,6 +4,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.catuns.onboarding.service.api.dto.OnboardingInitRequest;
 import xyz.catuns.onboarding.service.api.dto.OnboardingInitResponse;
+import xyz.catuns.onboarding.service.api.dto.OnboardingLatestResponse;
 import xyz.catuns.onboarding.service.api.dto.StepSummaryDto;
 import xyz.catuns.onboarding.service.domain.*;
 import xyz.catuns.onboarding.service.repository.OnboardingRequestRepository;
@@ -13,6 +14,8 @@ import xyz.catuns.onboarding.service.repository.OnboardingStepTypeRepository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class OnboardingInitialisationService {
@@ -70,5 +73,11 @@ public class OnboardingInitialisationService {
             onboardingRequest.getState().name(),
             stepDtos
         );
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<OnboardingLatestResponse> findLatestForUser(UUID userId) {
+        return requestRepository.findTopByUserProfileIdOrderByCreatedAtDesc(userId)
+            .map(r -> new OnboardingLatestResponse(r.getId(), r.getState().name()));
     }
 }
