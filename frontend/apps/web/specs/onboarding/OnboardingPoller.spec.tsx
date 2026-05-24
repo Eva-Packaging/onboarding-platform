@@ -1,7 +1,11 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import OnboardingPoller, { shouldStopPolling, TERMINAL_STATES } from '../../components/onboarding/OnboardingPoller';
+import OnboardingPoller, {
+  shouldStopPolling,
+  shouldShowCorrelationBadge,
+  TERMINAL_STATES,
+} from '../../components/onboarding/OnboardingPoller';
 
 jest.mock('@feature/base/server', () => ({
   getOnboardingStatus: jest.fn(),
@@ -124,5 +128,81 @@ describe('OnboardingPoller — with requestId', () => {
     await waitFor(() => {
       expect(screen.getByText(CORRELATION_ID)).toBeInTheDocument();
     });
+  });
+
+  it('shows the correlation badge when the request has FAILED state', async () => {
+    mockGetOnboardingStatus.mockResolvedValue(makeApiResponse('FAILED') as never);
+
+    render(<OnboardingPoller requestId={REQUEST_ID} />, { wrapper });
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /contact support/i })).toBeInTheDocument();
+    });
+  });
+
+  it('does not show the correlation badge for IN_PROGRESS state with no action-required steps', async () => {
+    mockGetOnboardingStatus.mockResolvedValue(makeApiResponse('IN_PROGRESS') as never);
+
+    render(<OnboardingPoller requestId={REQUEST_ID} />, { wrapper });
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('link', { name: /contact support/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('shouldShowCorrelationBadge', () => {
+  function makeData(state: string, steps: { type: string; state: string }[] = []) {
+    return {
+      requestId: REQUEST_ID,
+      userId: 'user-uuid',
+      state,
+      correlationId: CORRELATION_ID,
+      startedAt: '2026-05-22T22:05:00Z',
+      steps,
+    };
+  }
+
+  it('returns true for FAILED overall state', () => {
+    expect(shouldShowCorrelationBadge(makeData('FAILED'))).toBe(true);
+  });
+
+  it('returns true for PARTIAL_SUCCESS overall state', () => {
+    expect(shouldShowCorrelationBadge(makeData('PARTIAL_SUCCESS'))).toBe(true);
+  });
+
+  it('returns true for CANCELLED overall state', () => {
+    expect(shouldShowCorrelationBadge(makeData('CANCELLED'))).toBe(true);
+  });
+
+  it('returns true when a step has PENDING_EXTERNAL_ACCEPTANCE state', () => {
+    const data = makeData('IN_PROGRESS', [
+      { type: 'GITHUB_TEAM_PROVISIONING', state: 'PENDING_EXTERNAL_ACCEPTANCE' },
+    ]);
+    expect(shouldShowCorrelationBadge(data)).toBe(true);
+  });
+
+  it('returns true when a step has ACTION_REQUIRED state', () => {
+    const data = makeData('IN_PROGRESS', [
+      { type: 'IDENTITY_CORRELATION', state: 'ACTION_REQUIRED' },
+    ]);
+    expect(shouldShowCorrelationBadge(data)).toBe(true);
+  });
+
+  it('returns false for COMPLETED state with no action steps', () => {
+    expect(shouldShowCorrelationBadge(makeData('COMPLETED'))).toBe(false);
+  });
+
+  it('returns false for IN_PROGRESS with no action steps', () => {
+    const data = makeData('IN_PROGRESS', [
+      { type: 'IDENTITY_CORRELATION', state: 'SUCCEEDED' },
+      { type: 'GITHUB_TEAM_PROVISIONING', state: 'PROCESSING' },
+    ]);
+    expect(shouldShowCorrelationBadge(data)).toBe(false);
+  });
+
+  it('returns false when data is undefined', () => {
+    expect(shouldShowCorrelationBadge(undefined)).toBe(false);
   });
 });

@@ -5,6 +5,7 @@ import { getOnboardingStatus } from '@feature/base/server';
 import type { GetOnboardingStatusResponse } from '@feature/base/server';
 import OnboardingStatusBanner from './OnboardingStatusBanner';
 import StepList from './StepList';
+import CorrelationIdBadge from './CorrelationIdBadge';
 
 export const TERMINAL_STATES = new Set([
   'COMPLETED',
@@ -15,6 +16,15 @@ export const TERMINAL_STATES = new Set([
 
 export function shouldStopPolling(state: string | undefined): boolean {
   return TERMINAL_STATES.has(state ?? '');
+}
+
+const ACTION_STEP_STATES = new Set(['PENDING_EXTERNAL_ACCEPTANCE', 'ACTION_REQUIRED']);
+const CORRELATION_BADGE_STATES = new Set(['FAILED', 'PARTIAL_SUCCESS', 'CANCELLED']);
+
+export function shouldShowCorrelationBadge(data: GetOnboardingStatusResponse | undefined): boolean {
+  if (!data) return false;
+  if (CORRELATION_BADGE_STATES.has(data.state)) return true;
+  return data.steps.some((s) => ACTION_STEP_STATES.has(s.state));
 }
 
 interface Props {
@@ -74,10 +84,15 @@ export default function OnboardingPoller({ requestId, correlationId }: Props) {
     );
   }
 
+  const resolvedCorrelationId = data?.correlationId ?? correlationId;
+
   return (
     <div className="mx-auto max-w-2xl p-6">
       <OnboardingStatusBanner state={data?.state} />
       <StepList steps={data?.steps ?? []} />
+      {shouldShowCorrelationBadge(data) && resolvedCorrelationId && (
+        <CorrelationIdBadge correlationId={resolvedCorrelationId} />
+      )}
     </div>
   );
 }
