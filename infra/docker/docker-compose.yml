@@ -117,6 +117,52 @@ services:
 #      - postgres
 #    restart: unless-stopped
 
+  zipkin:
+    image: openzipkin/zipkin:3
+    hostname: zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - observability
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.4.0
+    hostname: prometheus
+    ports:
+      - "9093:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - observability
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.0.1
+    hostname: grafana
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - observability
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
 networks:
   microservice:
     driver: bridge
@@ -124,7 +170,11 @@ networks:
     driver: bridge
   postgres:
     driver: bridge
+  observability:
+    driver: bridge
 
 volumes:
   kafka-1-data:
   postgres:
+  prometheus-data:
+  grafana-data:
