@@ -9,6 +9,7 @@ export default async function OnboardingPage() {
     redirect('/register');
   }
 
+
   return (
     <OnboardingPoller
       requestId={session.user.onboardingRequestId ?? null}
