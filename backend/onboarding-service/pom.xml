@@ -75,7 +75,6 @@
             <groupId>xyz.catuns.spring</groupId>
             <artifactId>jwt-spring-boot-starter</artifactId>
         </dependency>
-
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>

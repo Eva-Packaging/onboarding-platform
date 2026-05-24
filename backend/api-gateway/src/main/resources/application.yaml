@@ -39,6 +39,46 @@ spring:
                 - Path=/api/v1/provisioning/**
               filters:
                 - RewritePath=/api/v1/provisioning/(?<segment>.*), /api/v1/$\{segment}
+
+            # Docs UI — redirect to aggregated Swagger UI with service pre-selected
+            - id: docs-ui-user-service
+              uri: http://localhost
+              predicates:
+                - Path=/api/v1/docs/user-service
+              filters:
+                - RedirectTo=302, /swagger-ui/index.html?urls.primaryName=user-service
+            - id: docs-ui-onboarding-service
+              uri: http://localhost
+              predicates:
+                - Path=/api/v1/docs/onboarding-service
+              filters:
+                - RedirectTo=302, /swagger-ui/index.html?urls.primaryName=onboarding-service
+            - id: docs-ui-provisioning-service
+              uri: http://localhost
+              predicates:
+                - Path=/api/v1/docs/provisioning-service
+              filters:
+                - RedirectTo=302, /swagger-ui/index.html?urls.primaryName=provisioning-service
+
+            # API Docs
+            - id: api-docs-user-service
+              uri: lb://user-service
+              predicates:
+                - Path=/v3/api-docs/user-service
+              filters:
+                - RewritePath=/v3/api-docs/user-service, /v3/api-docs
+            - id: api-docs-onboarding-service
+              uri: lb://onboarding-service
+              predicates:
+                - Path=/v3/api-docs/onboarding-service
+              filters:
+                - RewritePath=/v3/api-docs/onboarding-service, /v3/api-docs
+            - id: api-docs-provisioning-service
+              uri: lb://provisioning-service
+              predicates:
+                - Path=/v3/api-docs/provisioning-service
+              filters:
+                - RewritePath=/v3/api-docs/provisioning-service, /v3/api-docs
   application:
     name: api-gateway
   profiles:
@@ -57,6 +97,16 @@ management:
       enabled: true
     readiness-state:
       enabled: true
+springdoc:
+  swagger-ui:
+    disable-swagger-default-url: true
+    urls:
+      - name: user-service
+        url: /v3/api-docs/user-service
+      - name: onboarding-service
+        url: /v3/api-docs/onboarding-service
+      - name: provisioning-service
+        url: /v3/api-docs/provisioning-service
 resilience4j:
   circuitbreaker:
     configs:

@@ -2,6 +2,7 @@ package xyz.catuns.onboarding.service.api;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +16,7 @@ import xyz.catuns.onboarding.service.service.OnboardingInitialisationService;
 
 @RestController
 @RequestMapping("/api/v1/internal")
+@Tag(name = "Internal", description = "Service-to-service endpoints (not exposed via gateway)")
 public class OnboardingInternalController {
 
     private final OnboardingInitialisationService initialisationService;
