@@ -1,6 +1,8 @@
 package xyz.catuns.onboarding.user.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,15 +46,23 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class UserRegistrationServiceTest {
 
     @TestConfiguration
-    static class JacksonConfig {
+    static class ServiceTestConfig {
         @Bean
         ObjectMapper objectMapper() {
             return new ObjectMapper();
+        }
+
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
         }
     }
 
     @Autowired
     UserRegistrationService service;
+
+    @Autowired
+    MeterRegistry meterRegistry;
 
     @Autowired
     UserProfileRepository profileRepo;
@@ -135,6 +145,34 @@ class UserRegistrationServiceTest {
         assertThat(first.correlationId()).isNotNull();
         assertThat(second.correlationId()).isNotNull();
         assertThat(first.correlationId()).isNotEqualTo(second.correlationId());
+    }
+
+    @Test
+    void register_incrementsRegistrationCounter() {
+        double before = meterRegistry.counter("onboarding.registrations").count();
+
+        service.register(buildRequest("gh-counter", "counteruser"));
+
+        assertThat(meterRegistry.counter("onboarding.registrations").count()).isEqualTo(before + 1);
+    }
+
+    @Test
+    void register_duplicateThrows_doesNotIncrementCounter() {
+        service.register(buildRequest("gh-dup-counter", "dupuser"));
+        UserProfile profile = profileRepo.findAll().stream()
+            .filter(p -> p.getExternalIdentities().stream()
+                .anyMatch(i -> "gh-dup-counter".equals(i.getExternalUserId())))
+            .findFirst().orElseThrow();
+        profile.setStatus(UserStatus.ACTIVE);
+        profileRepo.saveAndFlush(profile);
+
+        double before = meterRegistry.counter("onboarding.registrations").count();
+        org.junit.jupiter.api.Assertions.assertThrows(
+            xyz.catuns.onboarding.user.exception.DuplicateRegistrationException.class,
+            () -> service.register(buildRequest("gh-dup-counter", "dupuser"))
+        );
+
+        assertThat(meterRegistry.counter("onboarding.registrations").count()).isEqualTo(before);
     }
 
     private RegistrationRequest buildRequest(String githubUserId, String login) {

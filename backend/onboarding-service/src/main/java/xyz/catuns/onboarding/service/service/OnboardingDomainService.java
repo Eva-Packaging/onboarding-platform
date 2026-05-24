@@ -1,5 +1,6 @@
 package xyz.catuns.onboarding.service.service;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.catuns.onboarding.service.domain.*;
@@ -17,17 +18,20 @@ public class OnboardingDomainService {
     private final OnboardingStepRepository stepRepository;
     private final OnboardingStepStateMachine stepStateMachine;
     private final OnboardingRequestStateResolver requestStateResolver;
+    private final MeterRegistry meterRegistry;
 
     public OnboardingDomainService(
         OnboardingRequestRepository requestRepository,
         OnboardingStepRepository stepRepository,
         OnboardingStepStateMachine stepStateMachine,
-        OnboardingRequestStateResolver requestStateResolver
+        OnboardingRequestStateResolver requestStateResolver,
+        MeterRegistry meterRegistry
     ) {
         this.requestRepository = requestRepository;
         this.stepRepository = stepRepository;
         this.stepStateMachine = stepStateMachine;
         this.requestStateResolver = requestStateResolver;
+        this.meterRegistry = meterRegistry;
     }
 
     @Transactional
@@ -48,6 +52,12 @@ public class OnboardingDomainService {
         stepStateMachine.transitionTo(step, target);
         if (target == OnboardingStepState.PROCESSING) {
             step.setAttemptCount(step.getAttemptCount() + 1);
+        }
+        if (target == OnboardingStepState.FAILED) {
+            String stepTypeName = step.getStepType() != null
+                    ? step.getStepType().getStepKey().name()
+                    : "UNKNOWN";
+            meterRegistry.counter("onboarding.step.failures", "step_type", stepTypeName).increment();
         }
         OnboardingStep saved = stepRepository.save(step);
         recalculateRequestState(step.getOnboardingRequest());

@@ -1,5 +1,7 @@
 package xyz.catuns.onboarding.user.service;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.catuns.onboarding.user.api.dto.RegistrationRequest;
@@ -19,6 +21,7 @@ public class UserRegistrationService {
     private final AppRoleRepository roleRepo;
     private final OutboxEventRepository outboxRepo;
     private final UserRegisteredV1PayloadBuilder payloadBuilder;
+    private final Counter registrationCounter;
 
     public UserRegistrationService(
             UserProfileRepository profileRepo,
@@ -26,13 +29,17 @@ public class UserRegistrationService {
             ExternalProviderRepository providerRepo,
             AppRoleRepository roleRepo,
             OutboxEventRepository outboxRepo,
-            UserRegisteredV1PayloadBuilder payloadBuilder) {
+            UserRegisteredV1PayloadBuilder payloadBuilder,
+            MeterRegistry meterRegistry) {
         this.profileRepo = profileRepo;
         this.identityRepo = identityRepo;
         this.providerRepo = providerRepo;
         this.roleRepo = roleRepo;
         this.outboxRepo = outboxRepo;
         this.payloadBuilder = payloadBuilder;
+        this.registrationCounter = Counter.builder("onboarding.registrations")
+                .description("Total successful user registrations")
+                .register(meterRegistry);
     }
 
     @Transactional
@@ -91,7 +98,7 @@ public class UserRegistrationService {
                 request.getPrimaryEmail(), roleKeys, saved.getCreatedAt()
         ));
         outboxRepo.save(outbox);
-
+        registrationCounter.increment();
         return new RegistrationResult(saved.getId(), correlationId);
     }
 }
