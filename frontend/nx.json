@@ -63,7 +63,8 @@
         "orgName": "feature"
       },
       "auth": {},
-      "axios": {}
+      "axios": {},
+      "action": {}
     },
     "@nx/react": {
       "library": {
