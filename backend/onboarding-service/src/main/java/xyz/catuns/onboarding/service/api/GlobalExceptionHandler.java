@@ -11,6 +11,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import xyz.catuns.onboarding.service.api.dto.ErrorResponse;
+import xyz.catuns.onboarding.service.exception.OnboardingAccessDeniedException;
+import xyz.catuns.onboarding.service.exception.ResourceNotFoundException;
+import xyz.catuns.onboarding.service.exception.StepNotRetryableException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -37,6 +40,22 @@ public class GlobalExceptionHandler {
         ex.getConstraintViolations().forEach(v ->
                 details.put(v.getPropertyPath().toString(), v.getMessage()));
         return buildResponse(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Constraint violation", details);
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    ResponseEntity<ErrorResponse> handleNotFound(ResourceNotFoundException ex) {
+        return buildResponse(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(OnboardingAccessDeniedException.class)
+    ResponseEntity<ErrorResponse> handleAccessDenied(OnboardingAccessDeniedException ex) {
+        return buildResponse(HttpStatus.FORBIDDEN, "FORBIDDEN", ex.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(StepNotRetryableException.class)
+    ResponseEntity<ErrorResponse> handleStepNotRetryable(StepNotRetryableException ex) {
+        return buildResponse(HttpStatus.CONFLICT, "STEP_NOT_RETRYABLE", ex.getMessage(),
+            Map.of("stepType", ex.getStepKey()));
     }
 
     @ExceptionHandler(Throwable.class)
