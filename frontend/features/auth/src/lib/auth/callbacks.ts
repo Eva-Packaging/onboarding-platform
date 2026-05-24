@@ -1,4 +1,4 @@
-import type { Account, Profile } from 'next-auth';
+import type { Account, Profile, User } from 'next-auth';
 import type { JWT } from 'next-auth/jwt';
 import type { GitHubProfile } from 'next-auth/providers/github';
 import { registerUser } from '../actions/registration';
@@ -9,6 +9,7 @@ export async function jwtCallback({
   account,
   profile,
 }: {
+  user: User;
   token: JWT;
   account: Account | null;
   profile?: Profile;

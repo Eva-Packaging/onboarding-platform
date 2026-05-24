@@ -4,7 +4,7 @@ interface Props {
   children: React.ReactNode;
 }
 
-export function Layout(props: Props): React.ReactElement {
+export function Layout(props: Props) {
   return (
     <>{props.children}</>
   );

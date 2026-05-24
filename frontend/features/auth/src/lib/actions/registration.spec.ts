@@ -1,15 +1,17 @@
+
+import api from '../config/client';
+import { registerUser, type RegisterUserResponse } from './registration';
+import { registerUserSchema } from '../types/schema';
+
+
 jest.mock('@next-feature/client/server', () => ({
   withApi: (fn: (...args: unknown[]) => unknown) => fn,
   withForm: (fn: (...args: unknown[]) => unknown) => fn,
 }));
-
 jest.mock('../config/client', () => ({
   __esModule: true,
   default: { post: jest.fn() },
 }));
-
-import api from '../config/client';
-import { registerUser, registerUserSchema, type RegisterUserResponse } from './registration';
 
 const mockPost = api.post as jest.MockedFunction<typeof api.post>;
 

@@ -3,12 +3,7 @@
 import { withApi } from '@next-feature/client/server';
 import { z } from 'zod';
 import api from '../config/client';
-
-export const getOnboardingStatusSchema = z.object({
-  requestId: z.string().uuid(),
-});
-
-export type GetOnboardingStatusRequest = z.infer<typeof getOnboardingStatusSchema>;
+import { getOnboardingStatusSchema } from '../types/schema';
 
 export interface OnboardingStepTarget {
   provider: string;
@@ -25,6 +20,9 @@ export interface OnboardingStep {
   startedAt?: string;
   completedAt?: string;
 }
+
+
+export type GetOnboardingStatusRequest = z.infer<typeof getOnboardingStatusSchema>;
 
 export interface GetOnboardingStatusResponse {
   requestId: string;

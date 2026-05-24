@@ -1,12 +1,19 @@
+import { auth } from '@feature/auth';
+import { redirect } from 'next/navigation';
+
 interface Props {
   params: Promise<{}>;
   searchParams: Promise<{}>;
 }
 
-async function DashnoardPage(props: Props) {
-  const params = await props.params;
+async function DashboardPage(props: Props) {
+  const session = await auth();
 
-  return <>Dashnoard Page</>;
+  if (!session?.user) {
+    redirect('/register');
+  }
+
+  return <>Dashboard Page</>;
 }
 
-export default DashnoardPage;
+export default DashboardPage;

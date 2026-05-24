@@ -1,3 +1,10 @@
+import api from '../config/client';
+import {
+  getOnboardingStatus,
+  type GetOnboardingStatusResponse,
+} from './onboarding';
+import { getOnboardingStatusSchema } from '../types/schema';
+
 jest.mock('@next-feature/client/server', () => ({
   withApi: (fn: (...args: unknown[]) => unknown) => fn,
   withForm: (fn: (...args: unknown[]) => unknown) => fn,
@@ -7,13 +14,6 @@ jest.mock('../config/client', () => ({
   __esModule: true,
   default: { get: jest.fn() },
 }));
-
-import api from '../config/client';
-import {
-  getOnboardingStatus,
-  getOnboardingStatusSchema,
-  type GetOnboardingStatusResponse,
-} from './onboarding';
 
 const mockGet = api.get as jest.MockedFunction<typeof api.get>;
 
@@ -37,11 +37,16 @@ beforeEach(() => {
 
 describe('getOnboardingStatusSchema', () => {
   it('accepts a valid UUID requestId', () => {
-    expect(getOnboardingStatusSchema.safeParse({ requestId: validRequestId }).success).toBe(true);
+    expect(
+      getOnboardingStatusSchema.safeParse({ requestId: validRequestId })
+        .success,
+    ).toBe(true);
   });
 
   it('rejects a non-UUID requestId', () => {
-    expect(getOnboardingStatusSchema.safeParse({ requestId: 'not-a-uuid' }).success).toBe(false);
+    expect(
+      getOnboardingStatusSchema.safeParse({ requestId: 'not-a-uuid' }).success,
+    ).toBe(false);
   });
 
   it('rejects a missing requestId', () => {
@@ -55,20 +60,24 @@ describe('getOnboardingStatus', () => {
 
     const result = await getOnboardingStatus({ requestId: validRequestId });
 
-    expect(mockGet).toHaveBeenCalledWith(`/api/v1/onboarding/${validRequestId}`);
+    expect(mockGet).toHaveBeenCalledWith(
+      `/api/v1/onboarding/${validRequestId}`,
+    );
     expect(result).toEqual(mockResponse);
   });
 
   it('throws when requestId is not a valid UUID', async () => {
-    await expect(getOnboardingStatus({ requestId: 'bad-id' })).rejects.toThrow();
+    await expect(
+      getOnboardingStatus({ requestId: 'bad-id' }),
+    ).rejects.toThrow();
     expect(mockGet).not.toHaveBeenCalled();
   });
 
   it('propagates errors from the API client', async () => {
     mockGet.mockRejectedValue(new Error('Network error'));
 
-    await expect(getOnboardingStatus({ requestId: validRequestId })).rejects.toThrow(
-      'Network error'
-    );
+    await expect(
+      getOnboardingStatus({ requestId: validRequestId }),
+    ).rejects.toThrow('Network error');
   });
 });
