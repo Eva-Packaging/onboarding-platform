@@ -6,12 +6,9 @@ declare module 'next-auth' {
   }
 
   interface User extends DefaultUser {
-    // id: string;
-    // role: Role;
-    // jwtToken?: string;
-    // refreshToken?: string;
-    // expiration?: number;
+    githubId?: string;
     githubLogin?: string;
+    githubAccessToken?: string;
   }
 }
 

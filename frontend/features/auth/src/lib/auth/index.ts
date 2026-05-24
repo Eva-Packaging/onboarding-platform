@@ -1,10 +1,9 @@
 import NextAuth from 'next-auth';
-import type { JWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import Github, { type GitHubProfile } from 'next-auth/providers/github';
+import Github from 'next-auth/providers/github';
 import { GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET } from "../config/env";
-import type { Session, User } from '../types/next-auth';
 import { authConfig } from './auth.config';
+import { jwtCallback, sessionCallback } from './callbacks';
 
 export const { auth, handlers, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -19,38 +18,16 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         email: { label: 'Email', type: 'text' },
         password: { label: 'Password', type: 'password' },
       },
-
-      async authorize(credentials) {
+      async authorize() {
         return null;
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, account, profile, trigger }) {
-
-      return token;
-    },
-    async session({
-      session,
-      token,
-    }: {
-      session: Session;
-      token: JWT;
-      user: User;
-    }) {
-      if (token && session.user) {
-        // session.user.id = token.sub as string;
-        // session.user.role = token.role as string;
-        // session.user.jwtToken = token.jwtToken as string;
-        // session.user.refreshToken = token.refreshToken as string;
-      }
-      return session;
-    },
-
+    jwt: jwtCallback,
+    session: sessionCallback,
     async redirect({ url, baseUrl }) {
-      // Allows relative callback URLs
       if (url.startsWith('/')) return `${baseUrl}${url}`;
-      // Allows callback URLs on the same origin
       else if (new URL(url).origin === baseUrl) return url;
       return baseUrl;
     },
