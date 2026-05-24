@@ -52,6 +52,10 @@ spring:
             trusted:
               packages: xyz.catuns.onboarding.service.*
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    template:
+      observation-enabled: true
+    listener:
+      observation-enabled: true
   profiles:
     active: dev
   jpa:

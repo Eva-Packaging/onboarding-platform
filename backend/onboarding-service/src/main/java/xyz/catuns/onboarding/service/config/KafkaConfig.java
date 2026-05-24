@@ -2,6 +2,7 @@ package xyz.catuns.onboarding.service.config;
 
 import java.util.Map;
 
+import io.micrometer.core.instrument.binder.kafka.KafkaConsumerMetrics;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
@@ -29,6 +30,11 @@ class KafkaConfig {
     @Bean
     public KafkaTemplate<String, Object> kafkaTemplate(ProducerFactory<String, Object> producerFactory) {
         return new KafkaTemplate<>(producerFactory);
+    }
+
+    @Bean
+    public KafkaConsumerMetrics kafkaConsumerMetrics() {
+        return new KafkaConsumerMetrics();
     }
 
 }

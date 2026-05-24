@@ -35,6 +35,12 @@ public class OutboxEvent {
     @Column(nullable = false)
     private boolean published = false;
 
+    @Column(name = "topic", length = 200)
+    private String topic;
+
+    @Column(name = "correlation_id", length = 128)
+    private String correlationId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

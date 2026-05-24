@@ -2,6 +2,7 @@ package xyz.catuns.onboarding.user.service;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.catuns.onboarding.user.api.dto.RegistrationRequest;
@@ -92,6 +93,8 @@ public class UserRegistrationService {
         outbox.setAggregateType("UserProfile");
         outbox.setAggregateId(saved.getId());
         outbox.setEventType("UserRegisteredV1");
+        outbox.setTopic("edu.user.registered.v1");
+        outbox.setCorrelationId(MDC.get("correlationId"));
         outbox.setPayload(payloadBuilder.build(
                 saved.getId(), correlationId,
                 request.getGithubUserId(), request.getGithubLogin(),
