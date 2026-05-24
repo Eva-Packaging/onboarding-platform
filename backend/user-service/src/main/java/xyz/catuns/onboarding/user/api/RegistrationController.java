@@ -34,7 +34,6 @@ public class RegistrationController {
         this.onboardingClient = onboardingClient;
     }
 
-
     @PostMapping("/registrations")
     @ApiResponse(responseCode = "201",description = "HTTP Status CREATED")
     @Operation(summary = "Registration", description = "Post Submit Registration")
