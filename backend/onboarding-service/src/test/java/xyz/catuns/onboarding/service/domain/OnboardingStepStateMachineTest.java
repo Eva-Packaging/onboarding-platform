@@ -84,6 +84,20 @@ class OnboardingStepStateMachineTest {
         assertThat(step.getState()).isEqualTo(OnboardingStepState.FAILED);
     }
 
+    @Test
+    void failedToPending_isValid_forRetryRequeue() {
+        OnboardingStep step = stepWith(OnboardingStepState.FAILED);
+        stateMachine.transitionTo(step, OnboardingStepState.PENDING);
+        assertThat(step.getState()).isEqualTo(OnboardingStepState.PENDING);
+    }
+
+    @Test
+    void manualReviewToPending_isValid_forRetryRequeue() {
+        OnboardingStep step = stepWith(OnboardingStepState.MANUAL_REVIEW);
+        stateMachine.transitionTo(step, OnboardingStepState.PENDING);
+        assertThat(step.getState()).isEqualTo(OnboardingStepState.PENDING);
+    }
+
     // --- invalid transitions ---
 
     @Test

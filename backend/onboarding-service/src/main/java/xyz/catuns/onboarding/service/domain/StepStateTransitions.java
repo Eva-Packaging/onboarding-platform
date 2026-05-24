@@ -22,9 +22,9 @@ public final class StepStateTransitions {
         map.put(OnboardingStepState.PENDING_EXTERNAL_ACCEPTANCE,
             EnumSet.of(OnboardingStepState.SUCCEEDED, OnboardingStepState.FAILED));
         map.put(OnboardingStepState.FAILED,
-            EnumSet.of(OnboardingStepState.PROCESSING));
+            EnumSet.of(OnboardingStepState.PENDING, OnboardingStepState.PROCESSING));
         map.put(OnboardingStepState.MANUAL_REVIEW,
-            EnumSet.of(OnboardingStepState.PROCESSING, OnboardingStepState.FAILED));
+            EnumSet.of(OnboardingStepState.PENDING, OnboardingStepState.PROCESSING, OnboardingStepState.FAILED));
         map.put(OnboardingStepState.SUCCEEDED,
             EnumSet.noneOf(OnboardingStepState.class));
         ALLOWED = Collections.unmodifiableMap(map);
