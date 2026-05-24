@@ -1,0 +1,176 @@
+{
+  "summary": "Phase 3: Onboarding Orchestration",
+  "description": "Expose the public-facing onboarding status and retry APIs in onboarding-service, and wire provider target resolution so each onboarding step is assigned to the correct GitHub team or Atlassian group based on the user's roles. The onboarding domain model, step state machine (OnboardingStepStateMachine, StepStateTransitions, RequestStateTransitions), request lifecycle service (OnboardingDomainService), and initialisation service (OnboardingInitialisationService) are already implemented. Remaining work is: GET /api/v1/onboarding/{requestId} for frontend polling, POST /api/v1/onboarding/{requestId}/retry for failed step recovery, and a ProviderTargetResolutionService that looks up group_mapping_rule and provider_target records by user roles and sets providerTargetId on each created step. All endpoint shapes and status codes must match <docs/rest-api-reference.md>. Exit criteria: step transitions are deterministic and idempotent; the frontend can poll onboarding state; retry logic works for FAILED and MANUAL_REVIEW steps.",
+  "labels": ["phase-3", "onboarding-orchestration", "onboarding-service", "rest-api", "provider-targets"],
+  "priority": "High",
+  "userType": "authenticated user",
+  "functionality": "poll onboarding progress and retry failed provisioning steps without support intervention",
+  "benefit": "the frontend can show real-time step-level progress and users can self-recover from transient provisioning failures without waiting for manual admin action",
+  "stories": [
+    {
+      "summary": "GET /api/v1/onboarding/{requestId} — public onboarding status endpoint",
+      "description": "Add a public OnboardingController at the /api/v1/onboarding path in <backend/onboarding-service/> with a GET /{requestId} endpoint that returns full onboarding status for the authenticated caller. The response must match the shape defined in <docs/rest-api-reference.md> section 3: requestId, userId, state, correlationId, startedAt, and a steps array where each entry includes type, state, target (provider, targetType, externalKey), attemptCount, lastErrorCode, startedAt, and completedAt. A ProviderTarget JPA entity and ProviderTargetRepository must be added to resolve providerTargetId on each OnboardingStep into target details. Authorization must verify that the authenticated caller's userId matches the request's userProfileId; non-owners receive 403. Return 404 when the requestId does not exist.",
+      "labels": ["onboarding-service", "rest-api", "status-api", "provider-target"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Authenticated owner receives full onboarding status",
+          "given": "an authenticated user who owns an onboarding request with a mix of PENDING, PROCESSING, and SUCCEEDED steps",
+          "when": "GET /api/v1/onboarding/{requestId} is called",
+          "then": "HTTP 200 is returned with requestId, state, correlationId, startedAt, and a steps array where each step includes type, state, target details, attemptCount, and timestamps"
+        },
+        {
+          "scenario": "Non-owner receives 403",
+          "given": "an authenticated user whose userId does not match the onboarding request's userProfileId",
+          "when": "GET /api/v1/onboarding/{requestId} is called",
+          "then": "HTTP 403 is returned with the standard error envelope"
+        },
+        {
+          "scenario": "Unknown requestId returns 404",
+          "given": "a requestId that does not exist in the database",
+          "when": "GET /api/v1/onboarding/{requestId} is called",
+          "then": "HTTP 404 is returned with the standard error envelope"
+        },
+        {
+          "scenario": "Step with a resolved provider target includes target details",
+          "given": "an onboarding step whose providerTargetId points to a GITHUB_TEAM provider target with externalKey 'learners'",
+          "when": "the status response is assembled",
+          "then": "the step entry contains target.provider = GITHUB, target.targetType = GITHUB_TEAM, and target.externalKey = learners"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add ProviderTarget JPA entity and ProviderTargetRepository",
+          "description": "Create xyz.catuns.onboarding.service.domain.ProviderTarget mapping the provider_target table with fields: id (UUID), providerId (UUID FK), targetType (VARCHAR), externalKey (VARCHAR), displayName (VARCHAR), enabled (BOOLEAN). Add xyz.catuns.onboarding.service.repository.ProviderTargetRepository extending JpaRepository<ProviderTarget, UUID>."
+        },
+        {
+          "summary": "Create OnboardingStatusResponse and StepDetailDto",
+          "description": "Add xyz.catuns.onboarding.service.api.dto.OnboardingStatusResponse as a record with fields requestId, userId, state, correlationId, startedAt, and steps (List<StepDetailDto>). Add StepDetailDto with fields type, state, target (ProviderTargetDto), attemptCount, lastErrorCode, startedAt, completedAt. Add ProviderTargetDto with fields provider, targetType, externalKey."
+        },
+        {
+          "summary": "Implement OnboardingStatusService",
+          "description": "Add xyz.catuns.onboarding.service.service.OnboardingStatusService with a findById(UUID requestId, UUID callerId) method. Fetch the OnboardingRequest; throw ResourceNotFoundException if absent. Check userProfileId == callerId; throw AccessDeniedException if not. Load steps via OnboardingStepRepository.findByOnboardingRequest_Id, resolve each providerTargetId via ProviderTargetRepository, and assemble OnboardingStatusResponse."
+        },
+        {
+          "summary": "Add GET /{requestId} to OnboardingController",
+          "description": "Create xyz.catuns.onboarding.service.api.OnboardingController at @RequestMapping('/api/v1/onboarding'). Add @GetMapping('/{requestId}') that extracts the caller's userId from the JWT principal and delegates to OnboardingStatusService. Return ResponseEntity<OnboardingStatusResponse> with HTTP 200."
+        },
+        {
+          "summary": "Add unit and slice tests for status endpoint",
+          "description": "Write a OnboardingStatusServiceTest covering owner access, non-owner 403, and not-found 404. Write a MockMvc slice test in OnboardingControllerTest for the GET /{requestId} endpoint covering the same three paths."
+        }
+      ]
+    },
+    {
+      "summary": "POST /api/v1/onboarding/{requestId}/retry — retry failed onboarding steps",
+      "description": "Add a POST /api/v1/onboarding/{requestId}/retry endpoint in <backend/onboarding-service/> that accepts a list of step type keys to retry and transitions each matching step from FAILED or MANUAL_REVIEW back to PENDING so the Kafka consumer can re-dispatch provisioning events. The request body has a steps string array (required, at least one entry) and an optional reason string. The response must match <docs/rest-api-reference.md> section 4: HTTP 202 with requestId, state, requeuedSteps, and correlationId. Return 409 when any requested step is in a non-retryable state (SUCCEEDED, PROCESSING, PENDING). Return 400 when steps is empty. Return 404 when the requestId does not exist.",
+      "labels": ["onboarding-service", "rest-api", "retry", "state-machine"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Failed steps are transitioned to PENDING and 202 is returned",
+          "given": "an onboarding request with a JIRA_GROUP_PROVISIONING step in FAILED state",
+          "when": "POST /api/v1/onboarding/{requestId}/retry is called with steps=[JIRA_GROUP_PROVISIONING]",
+          "then": "HTTP 202 is returned, the step state is now PENDING, and the response body contains requeuedSteps=[JIRA_GROUP_PROVISIONING]"
+        },
+        {
+          "scenario": "Retrying a SUCCEEDED step returns 409",
+          "given": "an onboarding step in SUCCEEDED state",
+          "when": "the retry endpoint is called with that step's type key",
+          "then": "HTTP 409 is returned with the standard error envelope and no state changes are made"
+        },
+        {
+          "scenario": "Empty steps array returns 400",
+          "given": "a retry request with an empty steps array",
+          "when": "the endpoint is called",
+          "then": "HTTP 400 is returned before any database access occurs"
+        },
+        {
+          "scenario": "Request state is recalculated after steps are re-queued",
+          "given": "an onboarding request in FAILED state with one FAILED step",
+          "when": "the retry endpoint transitions the step to PENDING",
+          "then": "the onboarding request state is updated to IN_PROGRESS by OnboardingDomainService.recalculateRequestState"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create OnboardingRetryRequest and OnboardingRetryResponse DTOs",
+          "description": "Add xyz.catuns.onboarding.service.api.dto.OnboardingRetryRequest as a record with steps (List<String>, @NotEmpty, @Size(min=1)) and reason (String, nullable). Add OnboardingRetryResponse as a record with requestId (UUID), state (String), requeuedSteps (List<String>), and correlationId (UUID)."
+        },
+        {
+          "summary": "Implement OnboardingRetryService",
+          "description": "Add xyz.catuns.onboarding.service.service.OnboardingRetryService with a retry(UUID requestId, OnboardingRetryRequest request) method. Load the OnboardingRequest (404 if absent). For each step key in request.steps(), find the matching OnboardingStep by step type. If any step is not in FAILED or MANUAL_REVIEW, throw a StepNotRetryableException mapped to 409. Transition each eligible step to PENDING via OnboardingDomainService.transitionStep. Call recalculateRequestState. Return OnboardingRetryResponse."
+        },
+        {
+          "summary": "Add POST /{requestId}/retry to OnboardingController",
+          "description": "In xyz.catuns.onboarding.service.api.OnboardingController, add @PostMapping('/{requestId}/retry') accepting @Valid @RequestBody OnboardingRetryRequest. Delegate to OnboardingRetryService and return ResponseEntity<OnboardingRetryResponse> with HTTP 202."
+        },
+        {
+          "summary": "Map StepNotRetryableException to 409 in GlobalExceptionHandler",
+          "description": "Add xyz.catuns.onboarding.service.exception.StepNotRetryableException. In xyz.catuns.onboarding.service.api.GlobalExceptionHandler, add an @ExceptionHandler for StepNotRetryableException returning HTTP 409 with the standard ErrorResponse envelope including the step type key in the details map."
+        },
+        {
+          "summary": "Add unit and slice tests for retry endpoint",
+          "description": "Write OnboardingRetryServiceTest covering: successful retry of FAILED step, successful retry of MANUAL_REVIEW step, 409 for SUCCEEDED step, 409 for PROCESSING step, 404 for unknown requestId. Write a MockMvc slice test in OnboardingControllerTest for POST /{requestId}/retry covering valid, 400-empty-steps, 409, and 404 paths."
+        }
+      ]
+    },
+    {
+      "summary": "Provider target resolution from role-based group mapping rules",
+      "description": "Implement ProviderTargetResolutionService in <backend/onboarding-service/> and wire it into OnboardingInitialisationService so each created onboarding step is assigned the correct providerTargetId based on the user's roles and the group_mapping_rule table. Currently OnboardingInitialisationService creates all three steps without setting providerTargetId. The resolution service must query group_mapping_rule joined to provider_target, filter by the user's roleKeys and the step's target type (GITHUB_TEAM for GITHUB_TEAM_PROVISIONING, ATLASSIAN_GROUP for JIRA_GROUP_PROVISIONING), and return the highest-priority enabled target. IDENTITY_CORRELATION steps do not have a provider target. A GroupMappingRule JPA entity and repository must be added. If no mapping is found for a provisioning step the step is still created with providerTargetId null and a warning is logged.",
+      "labels": ["onboarding-service", "provider-targets", "group-mapping", "domain-service"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "GITHUB_TEAM_PROVISIONING step is assigned the correct provider target",
+          "given": "a user with role STUDENT and a group_mapping_rule linking STUDENT to a GITHUB_TEAM provider target with externalKey 'learners'",
+          "when": "OnboardingInitialisationService.initialise() is called",
+          "then": "the created GITHUB_TEAM_PROVISIONING step has providerTargetId set to the 'learners' team's provider_target.id"
+        },
+        {
+          "scenario": "IDENTITY_CORRELATION step is created without a provider target",
+          "given": "any user with any roles",
+          "when": "OnboardingInitialisationService.initialise() is called",
+          "then": "the IDENTITY_CORRELATION step has providerTargetId null"
+        },
+        {
+          "scenario": "Multiple enabled rules for the same role and target type use the highest-priority rule",
+          "given": "two enabled group_mapping_rule rows for STUDENT linking to two different GITHUB_TEAM targets with priority_order 1 and 2 respectively",
+          "when": "resolution is performed",
+          "then": "the target with the lower priority_order value (higher precedence) is selected"
+        },
+        {
+          "scenario": "No matching rule leaves providerTargetId null without throwing",
+          "given": "a user whose roles have no group_mapping_rule entries for ATLASSIAN_GROUP",
+          "when": "OnboardingInitialisationService.initialise() is called",
+          "then": "the JIRA_GROUP_PROVISIONING step is created with providerTargetId null and initialisation completes without error"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add GroupMappingRule JPA entity and repository",
+          "description": "Create xyz.catuns.onboarding.service.domain.GroupMappingRule mapping the group_mapping_rule table with fields: id (UUID), appRoleId (UUID FK), providerTargetId (UUID FK), cohortKey (VARCHAR nullable), priorityOrder (INTEGER), enabled (BOOLEAN). Add xyz.catuns.onboarding.service.repository.GroupMappingRuleRepository with a query method: List<GroupMappingRule> findByAppRoleIdInAndEnabledTrueOrderByPriorityOrderAsc(Collection<UUID> roleIds)."
+        },
+        {
+          "summary": "Add AppRole JPA entity and repository",
+          "description": "Create xyz.catuns.onboarding.service.domain.AppRole mapping the app_role table with fields: id (UUID), roleKey (VARCHAR). Add xyz.catuns.onboarding.service.repository.AppRoleRepository with Set<AppRole> findByRoleKeyIn(Collection<String> roleKeys)."
+        },
+        {
+          "summary": "Implement ProviderTargetResolutionService",
+          "description": "Add xyz.catuns.onboarding.service.service.ProviderTargetResolutionService with method Optional<UUID> resolveTarget(Collection<String> roleKeys, String targetType). Resolve roleKeys to AppRole ids via AppRoleRepository. Query GroupMappingRuleRepository ordered by priorityOrder. For each rule, load the ProviderTarget and check its targetType matches the requested type. Return the providerTargetId of the first match, or Optional.empty() if none found."
+        },
+        {
+          "summary": "Wire ProviderTargetResolutionService into OnboardingInitialisationService",
+          "description": "Update xyz.catuns.onboarding.service.service.OnboardingInitialisationService.initialise() to accept roleKeys from the OnboardingInitRequest. For GITHUB_TEAM_PROVISIONING steps, call resolveTarget(roleKeys, 'GITHUB_TEAM') and set step.setProviderTargetId() if present. For JIRA_GROUP_PROVISIONING steps, call resolveTarget(roleKeys, 'ATLASSIAN_GROUP'). Log a warning when no target is resolved for a provisioning step."
+        },
+        {
+          "summary": "Add unit tests for ProviderTargetResolutionService",
+          "description": "Write ProviderTargetResolutionServiceTest using mocked repositories covering: single matching rule, multiple rules selecting lowest priority_order, no matching rule returns empty, disabled rules are excluded. Write an integration test in OnboardingInitialisationServiceTest that verifies providerTargetId is set on provisioning steps when seed data provides matching group_mapping_rule rows."
+        }
+      ]
+    }
+  ]
+}

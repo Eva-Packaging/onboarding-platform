@@ -1,0 +1,254 @@
+{
+  "summary": "Phase 7: Frontend Onboarding UX",
+  "description": "Implement the complete GitHub-first onboarding user experience in the Next.js frontend. This phase covers wiring the GitHub OAuth provider into the Auth.js configuration in <frontend/features/auth/>, calling POST /api/v1/registrations on first sign-in, polling onboarding progress via GET /api/v1/onboarding/{requestId}, rendering a step-by-step progress UI with all terminal and intermediate states, and surfacing correlation IDs for support handoff. The pages <frontend/apps/web/app/register/page.tsx>, <frontend/apps/web/app/onboarding/page.tsx>, and <frontend/apps/web/app/support/page.tsx> are currently empty stubs. Exit criteria: a user can sign in with GitHub, have their registration submitted automatically, and watch real-time onboarding progress without a hard refresh; partial success and provider-specific pending states are visually distinct; correlation IDs are surfaced on error and action-required states.",
+  "labels": ["phase-7", "frontend", "nextjs", "auth", "onboarding-ux", "react-query"],
+  "priority": "High",
+  "userType": "new user",
+  "functionality": "sign in with GitHub and watch their onboarding provisioning progress in real time without manual intervention",
+  "benefit": "users immediately understand what is happening after sign-up and know what action, if any, they need to take to complete onboarding",
+  "stories": [
+    {
+      "summary": "GitHub OAuth provider and JWT session enrichment",
+      "description": "Wire the GitHub OAuth provider into the Auth.js configuration at <frontend/features/auth/src/lib/auth/auth.config.ts> and add jwt/session callbacks that capture githubId, githubLogin, and githubAccessToken from the GitHub profile. The type declarations in <frontend/features/auth/src/lib/types/next-auth.d.ts> must be extended so these fields are typed on the session and JWT objects. Environment variables GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be declared in the auth feature env schema. After sign-in, Auth.js must redirect new users to <frontend/apps/web/app/onboarding/page.tsx> via the existing newUser page configuration.",
+      "labels": ["auth", "github-oauth", "nextauth", "jwt"],
+      "priority": "High",
+      "storyPoints": 3,
+      "acceptanceCriteria": [
+        {
+          "scenario": "GitHub provider is configured and initiates OAuth flow",
+          "given": "the user visits the sign-in page",
+          "when": "the user clicks the GitHub sign-in button",
+          "then": "the browser is redirected to GitHub's OAuth authorization endpoint with the correct client ID and scopes"
+        },
+        {
+          "scenario": "JWT callback captures GitHub identity fields",
+          "given": "a user completes GitHub OAuth",
+          "when": "the jwt callback runs",
+          "then": "the token object contains githubId, githubLogin, and githubAccessToken populated from the GitHub profile"
+        },
+        {
+          "scenario": "Session exposes GitHub identity fields to the client",
+          "given": "a user has an active session",
+          "when": "useSession() or getServerSession() is called",
+          "then": "session.user.githubId, session.user.githubLogin, and session.user.githubAccessToken are present and correctly typed"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add GitHub provider to auth.config.ts",
+          "description": "Import GitHub from next-auth/providers/github and add it to the providers array in <frontend/features/auth/src/lib/auth/auth.config.ts>. Add jwt and session callbacks that map account.providerAccountId to token.githubId, profile.login to token.githubLogin, and account.access_token to token.githubAccessToken. Propagate these from token to session.user in the session callback."
+        },
+        {
+          "summary": "Extend next-auth type declarations",
+          "description": "In <frontend/features/auth/src/lib/types/next-auth.d.ts>, extend the Session.user interface with githubId: string, githubLogin: string, and githubAccessToken: string. Extend the JWT interface with the same fields."
+        },
+        {
+          "summary": "Declare GitHub OAuth env vars in the auth feature env schema",
+          "description": "Add GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET as required string fields in <frontend/features/auth/src/lib/config/env.ts>. Update <frontend/apps/web/lib/config/env.ts> if GITHUB_CLIENT_ID or GITHUB_CLIENT_SECRET must be accessible at the app level."
+        },
+        {
+          "summary": "Add unit tests for JWT and session callbacks",
+          "description": "Write Jest tests that call the jwt and session callback functions directly with mock GitHub profile and account objects, asserting that githubId, githubLogin, and githubAccessToken are correctly mapped into the token and session."
+        }
+      ]
+    },
+    {
+      "summary": "Registration API client and first-sign-in backend call",
+      "description": "Create a typed server-side API client function in <frontend/apps/web/lib/> that calls POST /api/v1/registrations on the backend using the BACKEND_API_URL env var. This function must be called once per new user after GitHub OAuth completes, using the session's githubId, githubLogin, primaryEmail, displayName, and avatarUrl as the request body. The returned onboardingRequestId and correlationId must be persisted in the JWT so downstream pages can read them. A new user who signs in must be automatically registered without visiting a separate form. The request shape and error envelope must conform to <docs/rest-api-reference.md>.",
+      "labels": ["registration", "api-client", "user-service", "nextjs", "jwt"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "New user is registered on first sign-in",
+          "given": "a user completes GitHub OAuth for the first time",
+          "when": "the jwt callback runs after sign-in",
+          "then": "POST /api/v1/registrations is called with githubUserId, githubLogin, primaryEmail, displayName, and avatarUrl from the GitHub profile"
+        },
+        {
+          "scenario": "onboardingRequestId is stored in the session",
+          "given": "the registration API returns HTTP 201",
+          "when": "the jwt callback processes the response",
+          "then": "token.onboardingRequestId and token.correlationId are set and propagated to session.user"
+        },
+        {
+          "scenario": "Already-registered user is not re-registered",
+          "given": "a returning user signs in and token.onboardingRequestId is already set",
+          "when": "the jwt callback runs",
+          "then": "POST /api/v1/registrations is not called again"
+        },
+        {
+          "scenario": "Registration API error does not crash sign-in",
+          "given": "the backend returns a 5xx response",
+          "when": "the jwt callback processes the error",
+          "then": "an error flag is set on the token so the onboarding page can surface it without an unhandled exception"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create registerUser API client function",
+          "description": "Add <frontend/apps/web/lib/api/register-user.ts> that accepts a RegistrationRequest-shaped payload and calls POST /api/v1/registrations using the BACKEND_API_URL env var. Return a typed RegistrationResponse or throw a typed ApiError. Do not use RestClient for this call."
+        },
+        {
+          "summary": "Call registerUser from the jwt callback for new users",
+          "description": "In the jwt callback in <frontend/features/auth/src/lib/auth/auth.config.ts>, check if token.onboardingRequestId is absent (first sign-in), then call registerUser with the GitHub profile fields. Store the returned onboardingRequestId and correlationId on the token. Propagate both to session.user in the session callback."
+        },
+        {
+          "summary": "Extend next-auth type declarations for onboarding fields",
+          "description": "Add onboardingRequestId: string and correlationId: string to the JWT and Session.user interface extensions in <frontend/features/auth/src/lib/types/next-auth.d.ts>."
+        },
+        {
+          "summary": "Add unit tests for registerUser and jwt integration",
+          "description": "Write Jest tests for registerUser using fetch mocking, covering 201 success, 409 conflict (user already exists), and 5xx error cases. Write a callback-level test for the first-sign-in branch."
+        }
+      ]
+    },
+    {
+      "summary": "Onboarding status polling page",
+      "description": "Implement the onboarding status page at <frontend/apps/web/app/onboarding/page.tsx>. The page must read onboardingRequestId from the session and poll GET /api/v1/onboarding/{requestId} using React Query's refetchInterval until the request reaches a terminal state (COMPLETED, FAILED, or CANCELLED). No hard refresh should be required during normal onboarding. Once a terminal state is detected, polling must stop. Overall request status (IN_PROGRESS, PENDING, COMPLETED, FAILED) must be displayed, along with a list of steps. The API client for GET /api/v1/onboarding/{requestId} must be added to <frontend/apps/web/lib/api/>. The page must handle the case where onboardingRequestId is missing from the session.",
+      "labels": ["onboarding", "polling", "react-query", "nextjs", "status-api"],
+      "priority": "High",
+      "storyPoints": 8,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Onboarding status is fetched and displayed automatically",
+          "given": "an authenticated user with a valid onboardingRequestId in their session visits /onboarding",
+          "when": "the page loads",
+          "then": "the current onboarding status and step list are rendered without the user taking any action"
+        },
+        {
+          "scenario": "Page polls without a hard refresh",
+          "given": "the onboarding request is in a non-terminal state",
+          "when": "the backend updates a step state",
+          "then": "the UI reflects the new state within the polling interval without a page reload"
+        },
+        {
+          "scenario": "Polling stops when onboarding reaches a terminal state",
+          "given": "the onboarding request transitions to COMPLETED or FAILED",
+          "when": "the polling response is processed",
+          "then": "React Query stops issuing further GET /api/v1/onboarding/{requestId} requests"
+        },
+        {
+          "scenario": "Missing onboardingRequestId shows an error state",
+          "given": "the user's session does not contain an onboardingRequestId",
+          "when": "the page renders",
+          "then": "an informative error message is displayed and no API call is made"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create getOnboardingStatus API client function",
+          "description": "Add <frontend/apps/web/lib/api/get-onboarding-status.ts> that calls GET /api/v1/onboarding/{requestId} and returns a typed OnboardingStatusResponse including status, steps[], and correlationId. The response shape must match <docs/rest-api-reference.md>."
+        },
+        {
+          "summary": "Implement onboarding page with React Query polling",
+          "description": "Update <frontend/apps/web/app/onboarding/page.tsx> to read onboardingRequestId from the session via getServerSession, then pass it as a prop to a client component that uses useQuery with a refetchInterval of 3000ms. Set refetchInterval to false when the returned status is COMPLETED, FAILED, or CANCELLED."
+        },
+        {
+          "summary": "Add overall status banner component",
+          "description": "Create an OnboardingStatusBanner component that renders the top-level request status (PENDING, IN_PROGRESS, COMPLETED, FAILED) with appropriate copy and visual treatment."
+        },
+        {
+          "summary": "Add unit and integration tests for polling behaviour",
+          "description": "Write React Testing Library tests for the client component, using msw or jest fetch mocks to simulate polling responses. Assert that refetchInterval becomes false after a COMPLETED response is returned."
+        }
+      ]
+    },
+    {
+      "summary": "Step-by-step progress UI components",
+      "description": "Build the StepList and StepItem components that render each onboarding step returned by GET /api/v1/onboarding/{requestId}. Steps include IDENTITY_CORRELATION, GITHUB_PROVISIONING, and ATLASSIAN_PROVISIONING. Each step has a state (PENDING, IN_PROGRESS, COMPLETED, FAILED, ACTION_REQUIRED) that must be visually distinct via an icon or badge. Step labels must be human-readable rather than raw enum values. The components must be created in <frontend/apps/web/components/> and composed into the onboarding page.",
+      "labels": ["onboarding", "ui-components", "progress-ui", "nextjs"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "All step states are visually distinct",
+          "given": "an onboarding response containing steps in PENDING, IN_PROGRESS, COMPLETED, FAILED, and ACTION_REQUIRED states",
+          "when": "the StepList is rendered",
+          "then": "each step shows a unique icon or colour corresponding to its state"
+        },
+        {
+          "scenario": "Step type names are human-readable",
+          "given": "a step with type GITHUB_PROVISIONING",
+          "when": "the StepItem renders",
+          "then": "the label displayed is a human-readable string such as GitHub Team Provisioning, not the raw enum value"
+        },
+        {
+          "scenario": "Completed onboarding shows all steps as completed",
+          "given": "the onboarding request has status COMPLETED and all steps have state COMPLETED",
+          "when": "the StepList renders",
+          "then": "all step items show the completed visual treatment and no pending or error indicators are visible"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create StepItem component",
+          "description": "Add <frontend/apps/web/components/onboarding/StepItem.tsx> that accepts a step object with type and state fields and renders a row with a state icon (pending, spinner, check, cross, warning) and a human-readable label. Map IDENTITY_CORRELATION to Identity Verification, GITHUB_PROVISIONING to GitHub Team Provisioning, and ATLASSIAN_PROVISIONING to Atlassian Group Provisioning."
+        },
+        {
+          "summary": "Create StepList component",
+          "description": "Add <frontend/apps/web/components/onboarding/StepList.tsx> that accepts a steps array and renders a StepItem for each entry. Maintain visual order matching the step sequence from the backend response."
+        },
+        {
+          "summary": "Compose StepList into the onboarding page",
+          "description": "Update the onboarding page client component to pass the steps array from the polling response to StepList. Place the StepList below the OnboardingStatusBanner."
+        },
+        {
+          "summary": "Write component tests for StepItem and StepList",
+          "description": "Write React Testing Library tests for StepItem covering each state value and for StepList covering empty, partial, and fully-completed step arrays."
+        }
+      ]
+    },
+    {
+      "summary": "Pending, error, and action-required states with correlation ID display",
+      "description": "Extend the onboarding UI to surface actionable information when onboarding cannot complete automatically. For ACTION_REQUIRED steps (e.g. a pending GitHub team invite), display a user-facing callout explaining what they must do. For FAILED steps, display an error message and, where available, the step-level error details from the API. For all non-successful terminal states, display the correlationId so the user can quote it when contacting support. The correlation ID is available from both the session and the onboarding status response. The support page at <frontend/apps/web/app/support/page.tsx> should accept correlationId as a query parameter and pre-populate it in a visible field.",
+      "labels": ["onboarding", "error-states", "action-required", "support", "correlation-id"],
+      "priority": "Medium",
+      "storyPoints": 3,
+      "acceptanceCriteria": [
+        {
+          "scenario": "ACTION_REQUIRED step shows a user-facing callout",
+          "given": "a step with state ACTION_REQUIRED and type GITHUB_PROVISIONING",
+          "when": "the StepItem renders",
+          "then": "a callout is shown explaining that the user must accept a pending GitHub team invitation"
+        },
+        {
+          "scenario": "FAILED step shows error details",
+          "given": "a step with state FAILED and an errorCode in the step details",
+          "when": "the StepItem renders",
+          "then": "the error code and a human-readable message are shown beneath the step label"
+        },
+        {
+          "scenario": "Correlation ID is displayed on error or action-required state",
+          "given": "the overall onboarding request is in a FAILED or ACTION_REQUIRED-containing state",
+          "when": "the onboarding page renders",
+          "then": "the correlationId is shown in a copyable field with a link to the support page"
+        },
+        {
+          "scenario": "Support page pre-populates correlationId from query parameter",
+          "given": "the user navigates to /support?correlationId=<uuid>",
+          "when": "the support page renders",
+          "then": "the correlationId field is pre-populated with the value from the query parameter"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add action-required callout to StepItem",
+          "description": "In <frontend/apps/web/components/onboarding/StepItem.tsx>, render a highlighted callout block when step.state is ACTION_REQUIRED. Map each step type to a specific instruction string (e.g. for GITHUB_PROVISIONING: Accept your GitHub team invitation to complete this step)."
+        },
+        {
+          "summary": "Add error detail display to StepItem",
+          "description": "When step.state is FAILED, render the errorCode and a fallback message below the step label. If step.details contains a message field, prefer that over a generic fallback."
+        },
+        {
+          "summary": "Add correlation ID badge with support link to the onboarding page",
+          "description": "In the onboarding page client component, when the request status is FAILED or any step is ACTION_REQUIRED, render a CorrelationIdBadge component showing the correlationId string with a copy-to-clipboard button and a link to /support?correlationId={correlationId}."
+        },
+        {
+          "summary": "Implement support page with correlationId pre-population",
+          "description": "Update <frontend/apps/web/app/support/page.tsx> to read the correlationId query parameter via searchParams and render it in a read-only or pre-filled input field alongside support contact information."
+        }
+      ]
+    }
+  ]
+}
