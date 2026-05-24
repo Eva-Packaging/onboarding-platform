@@ -18,7 +18,10 @@
       "@app\\web\\*": ["apps\\web\\*"],
       "@feature/auth": ["features/auth/src/index.ts"],
       "@feature/auth/server": ["features/auth/src/server.ts"],
-      "@feature\\auth\\*": ["features\\auth\\src\\*"]
+      "@feature\\auth\\*": ["features\\auth\\src\\*"],
+      "@feature/base": ["features/base/src/index.ts"],
+      "@feature/base/server": ["features/base/src/server.ts"],
+      "@feature\\base\\*": ["features\\base\\src\\*"]
     }
   },
   "exclude": ["node_modules", "tmp"]

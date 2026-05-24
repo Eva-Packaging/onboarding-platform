@@ -63,7 +63,11 @@
         "orgName": "feature"
       },
       "auth": {},
-      "axios": {}
+      "axios": {
+        "appProjectName": "web"
+      },
+      "action": {},
+      "data-type": {}
     },
     "@nx/react": {
       "library": {

@@ -8,7 +8,7 @@ import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
 
 export default defineConfig(() => ({
   root: import.meta.dirname,
-  cacheDir: '../../node_modules/.vite/features/auth',
+  cacheDir: '../../node_modules/.vite/features/base',
   plugins: [
     react(),
     nxViteTsPaths(),
@@ -26,7 +26,7 @@ export default defineConfig(() => ({
   // Configuration for building your library.
   // See: https://vite.dev/guide/build.html#library-mode
   build: {
-    outDir: '../../dist/features/auth',
+    outDir: '../../dist/features/base',
     emptyOutDir: true,
     reportCompressedSize: true,
     commonjsOptions: {
@@ -38,7 +38,7 @@ export default defineConfig(() => ({
         index: 'src/schema.ts',
         server: 'src/server.ts',
       },
-      name: 'auth',
+      name: 'base',
       fileName: (format, entryName) => `${entryName}.js`,
       // Change this to the formats you want to support.
       // Don't forget to update your package.json as well.
