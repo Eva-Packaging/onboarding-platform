@@ -7,9 +7,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.catuns.onboarding.service.TestcontainersConfiguration;
+import xyz.catuns.onboarding.service.exception.IllegalStateTransitionException;
 import xyz.catuns.onboarding.service.repository.OnboardingRequestRepository;
 import xyz.catuns.onboarding.service.repository.OnboardingStepRepository;
 import xyz.catuns.onboarding.service.repository.OnboardingStepTypeRepository;
+import xyz.catuns.onboarding.service.service.OnboardingDomainService;
 
 import java.util.UUID;
 

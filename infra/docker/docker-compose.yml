@@ -62,6 +62,16 @@ services:
   #     CONTROL_CENTER_REPLICATION_FACTOR: 1
   #     CONTROL_CENTER_INTERNAL_TOPICS_REPLICATION: 1
 
+  consul:
+    image: hashicorp/consul:1.21
+    hostname: consul
+    ports:
+      - "8500:8500"
+    command: "agent -dev -client=0.0.0.0 -bind=0.0.0.0"
+    networks:
+      - microservice
+    restart: unless-stopped
+
   postgres:
     image: postgres:17-alpine3.19
     environment:

@@ -65,6 +65,10 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-consul-discovery</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-openfeign</artifactId>
         </dependency>
         <dependency>
@@ -74,6 +78,11 @@
         <dependency>
             <groupId>xyz.catuns.spring</groupId>
             <artifactId>jwt-spring-boot-starter</artifactId>
+        </dependency>
+        <!--  included with base-starter-parent  -->
+        <dependency>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct</artifactId>
         </dependency>
 
         <dependency>

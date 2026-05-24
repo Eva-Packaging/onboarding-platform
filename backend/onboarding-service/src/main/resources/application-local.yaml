@@ -1,4 +1,12 @@
+server:
+  port: 8082
 spring:
+  cloud:
+    consul:
+      host: localhost
+      port: 8500
+      discovery:
+        enabled: false
   jpa:
     hibernate:
       ddl-auto: create
