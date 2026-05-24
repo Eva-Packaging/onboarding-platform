@@ -1,7 +1,7 @@
 const nextJest = require('next/jest.js');
 
 const createJestConfig = nextJest({
-  dir: './',
+  dir: __dirname,
 });
 
 const config = {
@@ -13,6 +13,7 @@ const config = {
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
   coverageDirectory: '../../coverage/apps/web',
   testEnvironment: 'jsdom',
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
 };
 
 module.exports = createJestConfig(config);

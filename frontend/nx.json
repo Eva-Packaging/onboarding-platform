@@ -63,7 +63,9 @@
         "orgName": "feature"
       },
       "auth": {},
-      "axios": {},
+      "axios": {
+        "appProjectName": "web"
+      },
       "action": {}
     },
     "@nx/react": {
