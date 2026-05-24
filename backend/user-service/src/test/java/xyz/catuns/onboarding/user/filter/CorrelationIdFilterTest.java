@@ -1,5 +1,7 @@
 package xyz.catuns.onboarding.user.filter;
 
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
@@ -10,6 +12,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -22,7 +27,7 @@ class CorrelationIdFilterTest {
     void setUp() {
         mockMvc = MockMvcBuilders
             .standaloneSetup(new PingController())
-            .addFilters(new CorrelationIdFilter())
+            .addFilters(new CorrelationIdFilter(mock(Tracer.class)))
             .build();
     }
 
@@ -65,6 +70,23 @@ class CorrelationIdFilterTest {
 
         mockMvc.perform(get("/ping").header(CorrelationIdFilter.CORRELATION_ID_HEADER, second))
             .andExpect(header().string(CorrelationIdFilter.CORRELATION_ID_HEADER, second));
+    }
+
+    @Test
+    void activeSpan_isTaggedWithCorrelationId() throws Exception {
+        Span span = mock(Span.class);
+        Tracer tracer = mock(Tracer.class);
+        when(tracer.currentSpan()).thenReturn(span);
+
+        MockMvc mvc = MockMvcBuilders
+            .standaloneSetup(new PingController())
+            .addFilters(new CorrelationIdFilter(tracer))
+            .build();
+
+        mvc.perform(get("/ping").header(CorrelationIdFilter.CORRELATION_ID_HEADER, "trace-id-abc"))
+            .andExpect(status().isOk());
+
+        verify(span).tag("correlationId", "trace-id-abc");
     }
 
     @RestController

@@ -1,5 +1,7 @@
 package xyz.catuns.onboarding.apigateway.filter;
 
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
@@ -13,6 +15,12 @@ import java.util.UUID;
 public class CorrelationIdFilter implements GlobalFilter, Ordered {
 
     static final String X_CORRELATION_ID = "X-Correlation-Id";
+
+    private final Tracer tracer;
+
+    public CorrelationIdFilter(Tracer tracer) {
+        this.tracer = tracer;
+    }
 
     @Override
     public int getOrder() {
@@ -37,6 +45,12 @@ public class CorrelationIdFilter implements GlobalFilter, Ordered {
             return Mono.empty();
         });
 
-        return chain.filter(mutated);
+        return chain.filter(mutated)
+                .doFirst(() -> {
+                    Span span = tracer.currentSpan();
+                    if (span != null) {
+                        span.tag("correlationId", correlationId);
+                    }
+                });
     }
 }

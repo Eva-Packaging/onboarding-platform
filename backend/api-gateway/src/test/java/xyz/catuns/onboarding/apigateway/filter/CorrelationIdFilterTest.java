@@ -1,5 +1,7 @@
 package xyz.catuns.onboarding.apigateway.filter;
 
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,11 +29,14 @@ class CorrelationIdFilterTest {
     @Mock
     private GatewayFilterChain chain;
 
+    @Mock
+    private Tracer tracer;
+
     private CorrelationIdFilter filter;
 
     @BeforeEach
     void setUp() {
-        filter = new CorrelationIdFilter();
+        filter = new CorrelationIdFilter(tracer);
     }
 
     @Test
@@ -128,5 +133,35 @@ class CorrelationIdFilterTest {
         String id1 = captor.getAllValues().get(0).getRequest().getHeaders().getFirst(CorrelationIdFilter.X_CORRELATION_ID);
         String id2 = captor.getAllValues().get(1).getRequest().getHeaders().getFirst(CorrelationIdFilter.X_CORRELATION_ID);
         assertThat(id1).isNotEqualTo(id2);
+    }
+
+    @Test
+    void filter_activeSpan_isTaggedWithCorrelationId() {
+        Span span = mock(Span.class);
+        when(tracer.currentSpan()).thenReturn(span);
+        when(chain.filter(any(ServerWebExchange.class))).thenReturn(Mono.empty());
+
+        String correlationId = "span-tag-test-id";
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/users/me")
+                .header(CorrelationIdFilter.X_CORRELATION_ID, correlationId)
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        StepVerifier.create(filter.filter(exchange, chain))
+                .verifyComplete();
+
+        verify(span).tag("correlationId", correlationId);
+    }
+
+    @Test
+    void filter_noActiveSpan_doesNotThrow() {
+        when(tracer.currentSpan()).thenReturn(null);
+        when(chain.filter(any(ServerWebExchange.class))).thenReturn(Mono.empty());
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/users/me").build());
+
+        StepVerifier.create(filter.filter(exchange, chain))
+                .verifyComplete();
     }
 }
