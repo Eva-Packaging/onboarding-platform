@@ -1,4 +1,4 @@
 package xyz.catuns.onboarding.common.security.provider;
 
-public record ServicePrincipal() {
+public record ServicePrincipal(String serviceName, String audience) {
 }

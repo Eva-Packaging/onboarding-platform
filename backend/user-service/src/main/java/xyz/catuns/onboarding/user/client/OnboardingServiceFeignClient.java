@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.UUID;
 
-@FeignClient(name = "${app.feign.clients.onboarding}", path = "/api/v1/internal")
+@FeignClient(name = "${app.feign.clients.onboarding}", path = "/api/v1/internal", configuration = OnboardingFeignConfig.class)
 interface OnboardingServiceFeignClient {
 
     @PostMapping("/onboarding-requests")
