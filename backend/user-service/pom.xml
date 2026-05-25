@@ -96,6 +96,11 @@
             <groupId>xyz.catuns.spring</groupId>
             <artifactId>jwt-spring-boot-starter</artifactId>
         </dependency>
+        <dependency>
+            <groupId>xyz.catuns.onboarding</groupId>
+            <artifactId>onboarding-common</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
         <!--  included with base-starter-parent  -->
         <dependency>
             <groupId>org.mapstruct</groupId>

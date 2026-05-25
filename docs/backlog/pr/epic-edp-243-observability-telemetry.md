@@ -6,14 +6,14 @@ Establishes end-to-end observability across all four backend microservices and t
 
 ## Commits
 
-| Commit | Story | Summary |
-|---|---|---|
-| `e385d30` | EDP-244 | Add Micrometer Tracing and Zipkin reporter to all backend services |
-| `4499715` | EDP-245 | Expose Prometheus metrics endpoint on all backend services |
-| `bed6abf` | EDP-246 | Structured JSON logging with MDC enrichment across all backend services |
-| `153fc5d` | EDP-247 | Kafka trace context propagation and consumer metrics |
-| `5e42c45` | EDP-248 | Add Zipkin, Prometheus, and Grafana to local docker-compose stack |
-| _(staged)_ | EDP-249 | Structured logging in Next.js frontend with Pino |
+| Commit     | Story   | Summary                                                                 |
+|------------|---------|-------------------------------------------------------------------------|
+| `e385d30`  | EDP-244 | Add Micrometer Tracing and Zipkin reporter to all backend services      |
+| `4499715`  | EDP-245 | Expose Prometheus metrics endpoint on all backend services              |
+| `bed6abf`  | EDP-246 | Structured JSON logging with MDC enrichment across all backend services |
+| `153fc5d`  | EDP-247 | Kafka trace context propagation and consumer metrics                    |
+| `5e42c45`  | EDP-248 | Add Zipkin, Prometheus, and Grafana to local docker-compose stack       |
+| _(staged)_ | EDP-249 | Structured logging in Next.js frontend with Pino                        |
 
 ---
 
@@ -64,12 +64,12 @@ management:
 
 **Custom business counters**
 
-| Service | Counter | Tag |
-|---|---|---|
-| `user-service` | `onboarding_registrations_total` | — |
-| `onboarding-service` | `onboarding_step_failures_total` | `step_type` |
-| `provisioning-service` | `provisioning_outcomes_total` | `provider`, `result` |
-| `provisioning-service` | `ProvisioningMetrics` bean | wraps all three |
+| Service                | Counter                          | Tag                  |
+|------------------------|----------------------------------|----------------------|
+| `user-service`         | `onboarding_registrations_total` | —                    |
+| `onboarding-service`   | `onboarding_step_failures_total` | `step_type`          |
+| `provisioning-service` | `provisioning_outcomes_total`    | `provider`, `result` |
+| `provisioning-service` | `ProvisioningMetrics` bean       | wraps all three      |
 
 Counters are injected into service classes via `MeterRegistry` constructor injection.
 
@@ -87,10 +87,10 @@ Counters are injected into service classes via `MeterRegistry` constructor injec
 
 **`logback-spring.xml` on each service**
 
-| Profile | Encoder | Notes |
-|---|---|---|
+| Profile         | Encoder                              | Notes                                   |
+|-----------------|--------------------------------------|-----------------------------------------|
 | `dev` / default | `LogstashEncoder` with `prettyPrint` | Human-readable during local development |
-| `prod` | `LogstashEncoder` raw JSON | Single-line JSON for log aggregators |
+| `prod`          | `LogstashEncoder` raw JSON           | Single-line JSON for log aggregators    |
 
 A static `service` field is set via `<springProperty>` reading `spring.application.name` so log lines are identifiable across aggregated streams.
 
@@ -98,16 +98,16 @@ A static `service` field is set via `<springProperty>` reading `spring.applicati
 
 Each service's `CorrelationIdFilter` was extended to populate:
 
-| MDC key | Source |
-|---|---|
+| MDC key         | Source                                                  |
+|-----------------|---------------------------------------------------------|
 | `correlationId` | `X-Correlation-ID` request header (generated if absent) |
-| `traceId` | `Tracer.currentSpan().context().traceId()` |
-| `spanId` | `Tracer.currentSpan().context().spanId()` |
+| `traceId`       | `Tracer.currentSpan().context().traceId()`              |
+| `spanId`        | `Tracer.currentSpan().context().spanId()`               |
 
 A new `MdcUserInterceptor` (`HandlerInterceptorAdapter` registered via `MdcWebMvcConfig`) populates:
 
-| MDC key | Source |
-|---|---|
+| MDC key  | Source                                    |
+|----------|-------------------------------------------|
 | `userId` | `SecurityContextHolder` JWT subject claim |
 
 **New files per service (example: `user-service`)**
@@ -162,11 +162,11 @@ Each adds `b3_trace_context JSONB` and `headers JSONB` columns to `outbox_event`
 
 **New services in `infra/docker/docker-compose.yml`**
 
-| Service | Image | Port | Purpose |
-|---|---|---|---|
-| `zipkin` | `openzipkin/zipkin:3` | `9411` | Trace collector and UI |
-| `prometheus` | `prom/prometheus:latest` | `9093:9090` | Metrics scraper |
-| `grafana` | `grafana/grafana:latest` | `3001:3000` | Dashboards; default login `admin/admin` |
+| Service      | Image                    | Port        | Purpose                                 |
+|--------------|--------------------------|-------------|-----------------------------------------|
+| `zipkin`     | `openzipkin/zipkin:3`    | `9411`      | Trace collector and UI                  |
+| `prometheus` | `prom/prometheus:latest` | `9093:9090` | Metrics scraper                         |
+| `grafana`    | `grafana/grafana:latest` | `3001:3000` | Dashboards; default login `admin/admin` |
 
 **Prometheus scrape config — `infra/docker/prometheus/prometheus.yml`**
 
@@ -174,11 +174,11 @@ Scrapes `/actuator/prometheus` on all four backend services at 15-second interva
 
 **Grafana provisioning — `infra/docker/grafana/provisioning/`**
 
-| File | Purpose |
-|---|---|
-| `datasources/prometheus.yml` | Pre-wires Prometheus datasource at `http://prometheus:9093` — no manual configuration required on first start |
-| `dashboards/dashboard.yml` | Dashboard provider pointing at the provisioned dashboard directory |
-| `dashboards/spring-boot.json` | Starter dashboard with JVM memory, HTTP server request rate/duration, and Kafka consumer lag panels |
+| File                          | Purpose                                                                                                       |
+|-------------------------------|---------------------------------------------------------------------------------------------------------------|
+| `datasources/prometheus.yml`  | Pre-wires Prometheus datasource at `http://prometheus:9093` — no manual configuration required on first start |
+| `dashboards/dashboard.yml`    | Dashboard provider pointing at the provisioned dashboard directory                                            |
+| `dashboards/spring-boot.json` | Starter dashboard with JVM memory, HTTP server request rate/duration, and Kafka consumer lag panels           |
 
 **`.env.example` additions**
 
@@ -200,13 +200,13 @@ GRAFANA_URL=http://grafana:3001
 
 **New files**
 
-| File | Purpose |
-|---|---|
-| `frontend/apps/web/lib/logger/server.ts` | pino instance; `pino-pretty` transport in development, raw JSON in production; static `service: 'web'` base field |
-| `frontend/apps/web/lib/logger/correlation.ts` | Module-level correlation ID store backed by `sessionStorage`; `getCorrelationId` / `setCorrelationId` |
-| `frontend/apps/web/lib/logger/client.ts` | pino browser logger; `transmit.send` POSTs each log event to `/api/log` via `navigator.sendBeacon` (fetch fallback); attaches current `correlationId` on every event |
-| `frontend/apps/web/app/api/log/route.ts` | POST route that receives browser log events and re-emits them via the server logger with `method`, `url`, `statusCode`, `responseTime`, `correlationId` |
-| `frontend/apps/web/middleware.ts` | Edge middleware; reads or generates `X-Correlation-ID`; forwards it on both the incoming request headers and response headers for all routes |
+| File                                                            | Purpose                                                                                                                                                                                                   |
+|-----------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `frontend/apps/web/lib/logger/server.ts`                        | pino instance; `pino-pretty` transport in development, raw JSON in production; static `service: 'web'` base field                                                                                         |
+| `frontend/apps/web/lib/logger/correlation.ts`                   | Module-level correlation ID store backed by `sessionStorage`; `getCorrelationId` / `setCorrelationId`                                                                                                     |
+| `frontend/apps/web/lib/logger/client.ts`                        | pino browser logger; `transmit.send` POSTs each log event to `/api/log` via `navigator.sendBeacon` (fetch fallback); attaches current `correlationId` on every event                                      |
+| `frontend/apps/web/app/api/log/route.ts`                        | POST route that receives browser log events and re-emits them via the server logger with `method`, `url`, `statusCode`, `responseTime`, `correlationId`                                                   |
+| `frontend/apps/web/middleware.ts`                               | Edge middleware; reads or generates `X-Correlation-ID`; forwards it on both the incoming request headers and response headers for all routes                                                              |
 | `frontend/apps/web/components/providers/GlobalErrorHandler.tsx` | `'use client'` component; reads `session.user.correlationId` from NextAuth JWT via `useSession()` and calls `setCorrelationId()`; wires `window.onerror` and `unhandledrejection` into the browser logger |
 
 **`instrumentation.ts` (updated)**
