@@ -1,4 +1,4 @@
-import { ApiClient, type ApiResponse, ApiError } from '@next-feature/client';
+import { ApiClient, type ApiResponse, ApiError } from '@client/api-client';
 import { BACKEND_API_URL } from './env';
 const json = require('../../../package.json');
 

@@ -15,13 +15,19 @@
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@app\\web\\*": ["apps\\web\\*"],
+      "@app/web/*": ["apps/web/*"],
       "@feature/auth": ["features/auth/src/index.ts"],
       "@feature/auth/server": ["features/auth/src/server.ts"],
-      "@feature\\auth\\*": ["features\\auth\\src\\*"],
+      "@feature/auth/*": ["features/auth/src/*"],
       "@feature/base": ["features/base/src/index.ts"],
       "@feature/base/server": ["features/base/src/server.ts"],
-      "@feature\\base\\*": ["features\\base\\src\\*"]
+      "@feature/base/*": ["features/base/src/*"],
+      "@client/api-client": ["clients/api-client/src/index.ts"],
+      "@client/api-client/server": ["clients/api-client/src/server.ts"],
+      "@client/api-client/*": ["clients/api-client/src/*"],
+      "@feature/logging": ["features/logging/src/index.ts"],
+      "@feature/logging/server": ["features/logging/src/server.ts"],
+      "@feature\\logging\\*": ["features\\logging\\src\\*"]
     }
   },
   "exclude": ["node_modules", "tmp"]

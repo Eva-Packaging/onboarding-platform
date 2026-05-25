@@ -21,7 +21,6 @@ export interface OnboardingStep {
   completedAt?: string;
 }
 
-
 export type GetOnboardingStatusRequest = z.infer<typeof getOnboardingStatusSchema>;
 
 export interface GetOnboardingStatusResponse {
@@ -42,8 +41,17 @@ export const getOnboardingStatus = withApi(
     }
 
     return api.get<GetOnboardingStatusResponse>(
-      `/api/v1/onboarding/${parsed.data.requestId}`
+      `/api/v1/onboarding/${parsed.data.requestId}`,
     );
   },
-  {},
+  {
+    fallbackData: {
+      requestId: '',
+      userId: '',
+      state: '',
+      correlationId: '',
+      startedAt: '',
+      steps: [],
+    },
+  },
 );
