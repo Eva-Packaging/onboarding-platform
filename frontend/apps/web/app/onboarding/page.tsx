@@ -9,10 +9,17 @@ export default async function OnboardingPage() {
     redirect('/register');
   }
 
+  if (session.user.registrationError) {
+    redirect('/register?error=registration_failed');
+  }
+
+  if (!session.user.onboardingRequestId) {
+    redirect('/dashboard');
+  }
 
   return (
     <OnboardingPoller
-      requestId={session.user.onboardingRequestId ?? null}
+      requestId={session.user.onboardingRequestId}
       correlationId={session.user.correlationId}
     />
   );

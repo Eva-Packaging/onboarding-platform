@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { getOnboardingStatus } from '@feature/base/server';
 import type { GetOnboardingStatusResponse } from '@feature/base/server';
@@ -33,6 +35,8 @@ interface Props {
 }
 
 export default function OnboardingPoller({ requestId, correlationId }: Props) {
+  const router = useRouter();
+
   const { data, isLoading, isError } = useQuery<GetOnboardingStatusResponse>({
     queryKey: ['onboarding-status', requestId],
     queryFn: async () => {
@@ -44,6 +48,14 @@ export default function OnboardingPoller({ requestId, correlationId }: Props) {
       return shouldStopPolling(query.state.data?.state) ? false : 3000;
     },
   });
+
+  useEffect(() => {
+    if (data?.state === 'COMPLETED') {
+      router.push('/dashboard');
+    } else if (data?.state === 'FAILED' || data?.state === 'CANCELLED') {
+      router.push('/support');
+    }
+  }, [data?.state, router]);
 
   if (!requestId) {
     return (

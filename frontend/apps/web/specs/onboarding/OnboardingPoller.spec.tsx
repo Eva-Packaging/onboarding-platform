@@ -7,6 +7,11 @@ import OnboardingPoller, {
   TERMINAL_STATES,
 } from '../../components/onboarding/OnboardingPoller';
 
+const mockPush = jest.fn();
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
+
 jest.mock('@feature/base/server', () => ({
   getOnboardingStatus: jest.fn(),
 }));
@@ -43,6 +48,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
 
 beforeEach(() => {
   mockGetOnboardingStatus.mockReset();
+  mockPush.mockReset();
 });
 
 describe('shouldStopPolling', () => {
@@ -149,6 +155,49 @@ describe('OnboardingPoller — with requestId', () => {
       expect(screen.getByRole('status')).toBeInTheDocument();
     });
     expect(screen.queryByRole('link', { name: /contact support/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('OnboardingPoller — redirects', () => {
+  it('redirects to /dashboard when state is COMPLETED', async () => {
+    mockGetOnboardingStatus.mockResolvedValue(makeApiResponse('COMPLETED') as never);
+
+    render(<OnboardingPoller requestId={REQUEST_ID} />, { wrapper });
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/dashboard');
+    });
+  });
+
+  it('redirects to /support when state is FAILED', async () => {
+    mockGetOnboardingStatus.mockResolvedValue(makeApiResponse('FAILED') as never);
+
+    render(<OnboardingPoller requestId={REQUEST_ID} />, { wrapper });
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/support');
+    });
+  });
+
+  it('redirects to /support when state is CANCELLED', async () => {
+    mockGetOnboardingStatus.mockResolvedValue(makeApiResponse('CANCELLED') as never);
+
+    render(<OnboardingPoller requestId={REQUEST_ID} />, { wrapper });
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/support');
+    });
+  });
+
+  it('does not redirect for IN_PROGRESS state', async () => {
+    mockGetOnboardingStatus.mockResolvedValue(makeApiResponse('IN_PROGRESS') as never);
+
+    render(<OnboardingPoller requestId={REQUEST_ID} />, { wrapper });
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeInTheDocument();
+    });
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });
 

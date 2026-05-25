@@ -150,7 +150,7 @@ export function LiquidMetalButton({ label = "Get Started", onClick, viewMode = "
       }, 600)
     }
 
-    signIn("github")
+    signIn("github", { callbackUrl: '/onboarding' })
 
   }
 
