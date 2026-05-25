@@ -21,12 +21,18 @@ const apiClient = new ApiClient({
     console.log('[auth-client] Refresh token expired');
   },
   onAuthenticated: async (config) => {
-    console.log(
-      '[auth-client]',
-      config.method.toUpperCase(),
-      config.url,
-      config.data ?? '',
-    );
+    try {
+      // Dynamic import breaks the circular dep: client → auth/index → callbacks → registration → client
+      const { auth } = await import('../auth/index');
+      const session = await auth();
+      const token = session?.user?.backendToken;
+      if (token) {
+        // config.headers ??= {};
+        config.headers['Authorization'] = `Bearer ${token}`;
+      }
+    } catch {
+      // Not in an authenticated server context (e.g., public endpoints)
+    }
   },
   onRefreshToken: async (originalRequest) => {
     return '';

@@ -9,6 +9,9 @@ app:
   feign:
     clients:
       onboarding: onboarding-service
+      github-url: https://api.github.com
+  outbox:
+    poll-interval-ms: 60000 # 1 minute should be good
 spring:
   application:
     name: user-service

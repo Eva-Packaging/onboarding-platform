@@ -4,9 +4,15 @@ jest.mock('../actions/registration', () => ({
   registerUser: jest.fn(),
 }));
 
+jest.mock('../actions/token', () => ({
+  exchangeToken: jest.fn(),
+}));
+
 import { registerUser } from '../actions/registration';
+import { exchangeToken } from '../actions/token';
 
 const mockRegisterUser = registerUser as jest.MockedFunction<typeof registerUser>;
+const mockExchangeToken = exchangeToken as jest.MockedFunction<typeof exchangeToken>;
 
 const baseToken = { sub: 'user-123', iat: 0, exp: 0, jti: '' };
 
@@ -43,13 +49,19 @@ function makeRegistrationSuccess() {
   };
 }
 
+function makeTokenSuccess(token = 'backend.jwt', expiresIn = 86400) {
+  return { success: true, data: { token, expiresIn } };
+}
+
 beforeEach(() => {
   mockRegisterUser.mockReset();
+  mockExchangeToken.mockReset();
 });
 
 describe('jwtCallback — github identity mapping', () => {
   it('maps github identity fields on sign-in', async () => {
     mockRegisterUser.mockResolvedValue(makeRegistrationSuccess() as never);
+    mockExchangeToken.mockResolvedValue(makeTokenSuccess() as never);
 
     const result = await jwtCallback({
       token: { ...baseToken },
@@ -64,6 +76,7 @@ describe('jwtCallback — github identity mapping', () => {
 
   it('converts numeric github id to string', async () => {
     mockRegisterUser.mockResolvedValue(makeRegistrationSuccess() as never);
+    mockExchangeToken.mockResolvedValue(makeTokenSuccess() as never);
 
     const result = await jwtCallback({
       token: { ...baseToken },
@@ -84,6 +97,7 @@ describe('jwtCallback — github identity mapping', () => {
 
     expect(result.githubId).toBeUndefined();
     expect(mockRegisterUser).not.toHaveBeenCalled();
+    expect(mockExchangeToken).not.toHaveBeenCalled();
   });
 
   it('does not modify token when account is null', async () => {
@@ -99,6 +113,7 @@ describe('jwtCallback — github identity mapping', () => {
 describe('jwtCallback — registration', () => {
   it('calls registerUser on first sign-in and stores onboardingRequestId and correlationId', async () => {
     mockRegisterUser.mockResolvedValue(makeRegistrationSuccess() as never);
+    mockExchangeToken.mockResolvedValue(makeTokenSuccess() as never);
 
     const result = await jwtCallback({
       token: { ...baseToken },
@@ -120,6 +135,7 @@ describe('jwtCallback — registration', () => {
 
   it('falls back to login as displayName when github name is null', async () => {
     mockRegisterUser.mockResolvedValue(makeRegistrationSuccess() as never);
+    mockExchangeToken.mockResolvedValue(makeTokenSuccess() as never);
 
     await jwtCallback({
       token: { ...baseToken },
@@ -133,6 +149,7 @@ describe('jwtCallback — registration', () => {
   });
 
   it('does not call registerUser when onboardingRequestId is already set', async () => {
+    mockExchangeToken.mockResolvedValue(makeTokenSuccess() as never);
     const token = { ...baseToken, onboardingRequestId: 'existing-onboarding-uuid' };
 
     const result = await jwtCallback({
@@ -147,6 +164,7 @@ describe('jwtCallback — registration', () => {
 
   it('sets registrationError when the API returns a non-success response', async () => {
     mockRegisterUser.mockResolvedValue({ success: false, data: null, error: {} } as never);
+    mockExchangeToken.mockResolvedValue(makeTokenSuccess() as never);
 
     const result = await jwtCallback({
       token: { ...baseToken },
@@ -160,6 +178,7 @@ describe('jwtCallback — registration', () => {
 
   it('sets registrationError when registerUser throws', async () => {
     mockRegisterUser.mockRejectedValue(new Error('Network error'));
+    mockExchangeToken.mockResolvedValue(makeTokenSuccess() as never);
 
     const result = await jwtCallback({
       token: { ...baseToken },
@@ -168,6 +187,139 @@ describe('jwtCallback — registration', () => {
     });
 
     expect(result.registrationError).toBe(true);
+  });
+});
+
+describe('jwtCallback — backend token issuance', () => {
+  it('calls exchangeToken with the github access token on sign-in', async () => {
+    mockRegisterUser.mockResolvedValue(makeRegistrationSuccess() as never);
+    mockExchangeToken.mockResolvedValue(makeTokenSuccess() as never);
+
+    await jwtCallback({
+      token: { ...baseToken },
+      account: makeGithubAccount('gho_abc'),
+      profile: makeGithubProfile() as never,
+    });
+
+    expect(mockExchangeToken).toHaveBeenCalledWith('gho_abc');
+  });
+
+  it('stores backendToken and backendTokenExpiresAt on sign-in', async () => {
+    mockRegisterUser.mockResolvedValue(makeRegistrationSuccess() as never);
+    mockExchangeToken.mockResolvedValue(makeTokenSuccess('my.jwt', 3600) as never);
+
+    const before = Date.now();
+    const result = await jwtCallback({
+      token: { ...baseToken },
+      account: makeGithubAccount(),
+      profile: makeGithubProfile() as never,
+    });
+    const after = Date.now();
+
+    expect(result.backendToken).toBe('my.jwt');
+    expect(result.backendTokenExpiresAt).toBeGreaterThanOrEqual(before + 3600 * 1000);
+    expect(result.backendTokenExpiresAt).toBeLessThanOrEqual(after + 3600 * 1000);
+  });
+
+  it('does not set backendToken when exchangeToken returns failure', async () => {
+    mockRegisterUser.mockResolvedValue(makeRegistrationSuccess() as never);
+    mockExchangeToken.mockResolvedValue({ success: false, data: null } as never);
+
+    const result = await jwtCallback({
+      token: { ...baseToken },
+      account: makeGithubAccount(),
+      profile: makeGithubProfile() as never,
+    });
+
+    expect(result.backendToken).toBeUndefined();
+  });
+});
+
+describe('jwtCallback — backend token refresh', () => {
+  it('refreshes backendToken when within 5 minutes of expiry', async () => {
+    mockExchangeToken.mockResolvedValue(makeTokenSuccess('refreshed.jwt') as never);
+    const expiresAt = Date.now() + 4 * 60 * 1000; // 4 min from now — inside threshold
+
+    const result = await jwtCallback({
+      token: {
+        ...baseToken,
+        githubAccessToken: 'gho_test',
+        backendToken: 'old.jwt',
+        backendTokenExpiresAt: expiresAt,
+      },
+      account: null,
+      profile: undefined,
+    });
+
+    expect(mockExchangeToken).toHaveBeenCalledWith('gho_test');
+    expect(result.backendToken).toBe('refreshed.jwt');
+  });
+
+  it('does not refresh backendToken when well outside expiry threshold', async () => {
+    const expiresAt = Date.now() + 60 * 60 * 1000; // 1 hour from now — outside threshold
+
+    const result = await jwtCallback({
+      token: {
+        ...baseToken,
+        githubAccessToken: 'gho_test',
+        backendToken: 'valid.jwt',
+        backendTokenExpiresAt: expiresAt,
+      },
+      account: null,
+      profile: undefined,
+    });
+
+    expect(mockExchangeToken).not.toHaveBeenCalled();
+    expect(result.backendToken).toBe('valid.jwt');
+  });
+
+  it('does not attempt refresh when githubAccessToken is missing', async () => {
+    const expiresAt = Date.now() + 60 * 1000; // near expiry but no access token
+
+    const result = await jwtCallback({
+      token: {
+        ...baseToken,
+        backendToken: 'old.jwt',
+        backendTokenExpiresAt: expiresAt,
+      },
+      account: null,
+      profile: undefined,
+    });
+
+    expect(mockExchangeToken).not.toHaveBeenCalled();
+    expect(result.backendToken).toBe('old.jwt');
+  });
+
+  it('does not attempt refresh when backendTokenExpiresAt is missing', async () => {
+    const result = await jwtCallback({
+      token: {
+        ...baseToken,
+        githubAccessToken: 'gho_test',
+        backendToken: 'some.jwt',
+      },
+      account: null,
+      profile: undefined,
+    });
+
+    expect(mockExchangeToken).not.toHaveBeenCalled();
+  });
+
+  it('keeps existing backendToken when refresh call fails', async () => {
+    mockExchangeToken.mockResolvedValue({ success: false, data: null } as never);
+    const expiresAt = Date.now() + 60 * 1000;
+
+    const result = await jwtCallback({
+      token: {
+        ...baseToken,
+        githubAccessToken: 'gho_test',
+        backendToken: 'old.jwt',
+        backendTokenExpiresAt: expiresAt,
+      },
+      account: null,
+      profile: undefined,
+    });
+
+    expect(result.backendToken).toBe('old.jwt');
   });
 });
 
@@ -198,6 +350,14 @@ describe('sessionCallback', () => {
     expect(result.user.correlationId).toBe('correlation-uuid');
   });
 
+  it('propagates backendToken to session user', async () => {
+    const token = { ...baseToken, backendToken: 'signed.jwt.value' };
+
+    const result = await sessionCallback({ session: makeSession() as never, token });
+
+    expect(result.user.backendToken).toBe('signed.jwt.value');
+  });
+
   it('propagates registrationError flag to session user', async () => {
     const token = { ...baseToken, registrationError: true };
 
@@ -215,6 +375,7 @@ describe('sessionCallback', () => {
     expect(result.user.onboardingRequestId).toBeUndefined();
     expect(result.user.correlationId).toBeUndefined();
     expect(result.user.registrationError).toBeUndefined();
+    expect(result.user.backendToken).toBeUndefined();
   });
 
   it('returns the session unchanged when session.user is falsy', async () => {

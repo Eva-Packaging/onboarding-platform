@@ -139,4 +139,4 @@ resilience4j:
 jwt:
   secret: ${JWT_SECRET}
   issuer: ${spring.application.name}
-  public-paths: /swagger-ui/**, /v3/api-docs/**, /actuator/**, /error/**, /api/v1/docs/**
+  public-paths: /swagger-ui/**, /v3/api-docs/**, /actuator/**, /error/**, /api/v1/docs/**, /api/v1/users/registrations, /api/v1/users/auth/token
