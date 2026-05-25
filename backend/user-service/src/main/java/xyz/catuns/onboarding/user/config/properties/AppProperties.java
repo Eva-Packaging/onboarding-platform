@@ -20,4 +20,11 @@ public class AppProperties {
     @NestedConfigurationProperty
     private KafkaTopicProperties kafka = new KafkaTopicProperties();
 
+    /**
+     * Outbox Event Properties
+     */
+    @NestedConfigurationProperty
+    private OutboxEventProperties outbox = new OutboxEventProperties();
+
+
 }

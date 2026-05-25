@@ -5,7 +5,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,7 +17,6 @@ import xyz.catuns.onboarding.user.client.OnboardingInitResponse;
 import xyz.catuns.onboarding.user.client.OnboardingServiceClient;
 import xyz.catuns.onboarding.user.service.RegistrationResult;
 import xyz.catuns.onboarding.user.service.UserRegistrationService;
-import xyz.catuns.spring.base.exception.controller.ConflictException;
 
 import java.util.Collections;
 import java.util.List;

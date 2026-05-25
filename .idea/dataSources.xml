@@ -13,12 +13,20 @@
       </jdbc-additional-properties>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
-    <data-source source="LOCAL" name="jdbc:postgresql://localhost:5432/user_service [DEBUG]" group="​UserServiceApplication" uuid="47f91d52-7060-422a-91a3-d81dd3fbd9ec">
+    <data-source source="LOCAL" name="jdbc:postgresql://localhost:5432/user_service [DEBUG]" group="​UserServiceApplication" uuid="be346b66-bf0f-4d37-bd62-9494ad795d20">
       <driver-ref>postgresql</driver-ref>
       <synchronize>true</synchronize>
       <imported>true</imported>
       <jdbc-driver>org.postgresql.Driver</jdbc-driver>
       <jdbc-url>jdbc:postgresql://localhost:5432/user_service</jdbc-url>
+      <working-dir>$ProjectFileDir$</working-dir>
+    </data-source>
+    <data-source source="LOCAL" name="jdbc:postgresql://localhost:5432/onboarding_service [DEBUG]" group="​OnboardingServiceApplication" uuid="43bb1dde-536b-46c9-877e-6005976a92f0">
+      <driver-ref>postgresql</driver-ref>
+      <synchronize>true</synchronize>
+      <imported>true</imported>
+      <jdbc-driver>org.postgresql.Driver</jdbc-driver>
+      <jdbc-url>jdbc:postgresql://localhost:5432/onboarding_service</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
   </component>

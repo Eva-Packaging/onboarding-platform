@@ -3,6 +3,7 @@
   <component name="NxAngularConfigService" workspaceLocation="file://$PROJECT_DIR$/frontend/nx.json">
     <projects>
       <project name="@onboarding-frontend/source" file="file://$PROJECT_DIR$/frontend/project.json" />
+      <project name="api-client" file="file://$PROJECT_DIR$/frontend/clients/api-client/project.json" />
       <project name="auth" file="file://$PROJECT_DIR$/frontend/features/auth/project.json" />
       <project name="base" file="file://$PROJECT_DIR$/frontend/features/base/project.json" />
       <project name="web" file="file://$PROJECT_DIR$/frontend/apps/web/project.json" />
