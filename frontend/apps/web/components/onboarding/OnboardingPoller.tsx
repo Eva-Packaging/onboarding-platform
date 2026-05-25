@@ -49,7 +49,7 @@ export default function OnboardingPoller({ requestId, correlationId }: Props) {
     },
     enabled: !!requestId,
     refetchInterval: (query) => {
-      return shouldStopPolling(query.state.data?.state) ? false : 3000;
+      return shouldStopPolling(query.state.data?.state) ? false : 30000;
     },
   });
 

@@ -24,9 +24,17 @@ const apiClient = new ApiClient({
     log.info('Refresh token expired');
   },
   onAuthenticated: async (config) => {
-    log.info(
-      `${config.method.toUpperCase()} ${config.url} ${config.data ?? ""}`,
-    );
+    try {
+      const { auth } = await import('@feature/auth');
+      const session = await auth();
+      const token = session?.user?.backendToken;
+      if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`;
+      }
+    } catch {
+      // Not in an authenticated server context (e.g., public endpoints)
+    }
+    log.info(`${config.method.toUpperCase()} ${config.url} ${config.data ?? ''}`);
   },
   onRefreshToken: async (originalRequest) => {
     return '';
