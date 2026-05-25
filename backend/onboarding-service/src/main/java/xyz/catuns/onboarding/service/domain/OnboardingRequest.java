@@ -20,7 +20,7 @@ public class OnboardingRequest {
     private UUID id;
 
     @Column(name = "user_profile_id", nullable = false)
-    private UUID userProfileId;
+    private String userProfileId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)

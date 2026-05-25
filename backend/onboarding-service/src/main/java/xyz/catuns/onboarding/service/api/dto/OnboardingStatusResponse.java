@@ -6,7 +6,7 @@ import java.util.UUID;
 
 public record OnboardingStatusResponse(
     UUID requestId,
-    UUID userId,
+    String userId,
     String state,
     UUID correlationId,
     Instant startedAt,

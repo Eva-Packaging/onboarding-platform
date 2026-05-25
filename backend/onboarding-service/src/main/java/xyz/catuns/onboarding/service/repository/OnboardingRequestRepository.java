@@ -8,7 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface OnboardingRequestRepository extends JpaRepository<OnboardingRequest, UUID> {
-    List<OnboardingRequest> findByUserProfileId(UUID userProfileId);
+    List<OnboardingRequest> findByUserProfileId(String userProfileId);
 
-    Optional<OnboardingRequest> findTopByUserProfileIdOrderByCreatedAtDesc(UUID userProfileId);
+    Optional<OnboardingRequest> findTopByUserProfileIdOrderByCreatedAtDesc(String userProfileId);
 }

@@ -39,7 +39,7 @@ public class OnboardingStatusService {
     }
 
     @Transactional(readOnly = true)
-    public OnboardingStatusResponse findById(UUID requestId, UUID callerId) {
+    public OnboardingStatusResponse findById(UUID requestId, String callerId) {
         OnboardingRequest request = requestRepository.findById(requestId)
             .orElseThrow(() -> new ResourceNotFoundException("OnboardingRequest", requestId));
 

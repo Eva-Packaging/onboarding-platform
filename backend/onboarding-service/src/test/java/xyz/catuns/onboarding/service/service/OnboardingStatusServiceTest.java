@@ -29,7 +29,7 @@ class OnboardingStatusServiceTest {
     private OnboardingStatusService statusService;
 
     private static final UUID REQUEST_ID = UUID.randomUUID();
-    private static final UUID OWNER_ID = UUID.randomUUID();
+    private static final String OWNER_ID = "123456789";
     private static final UUID CORRELATION_ID = UUID.randomUUID();
 
     @BeforeEach
@@ -58,7 +58,7 @@ class OnboardingStatusServiceTest {
 
     @Test
     void findById_nonOwner_throwsAccessDeniedException() {
-        UUID nonOwner = UUID.randomUUID();
+        String nonOwner = "999999999";
         OnboardingRequest request = buildRequest(OWNER_ID, OnboardingRequestState.IN_PROGRESS);
         when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request));
 
@@ -132,7 +132,7 @@ class OnboardingStatusServiceTest {
         assertThat(response.steps().get(0).target().provider()).isEqualTo("ATLASSIAN");
     }
 
-    private OnboardingRequest buildRequest(UUID userId, OnboardingRequestState state) {
+    private OnboardingRequest buildRequest(String userId, OnboardingRequestState state) {
         OnboardingRequest req = new OnboardingRequest();
         req.setId(REQUEST_ID);
         req.setUserProfileId(userId);

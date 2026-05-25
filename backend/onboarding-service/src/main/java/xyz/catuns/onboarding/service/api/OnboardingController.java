@@ -42,7 +42,7 @@ public class OnboardingController {
         @PathVariable UUID requestId,
         HttpServletRequest request
     ) {
-        UUID callerId = principalExtractor.extractUserId(request);
+        String callerId = principalExtractor.extractUserId(request);
         return ResponseEntity.ok(statusService.findById(requestId, callerId));
     }
 
