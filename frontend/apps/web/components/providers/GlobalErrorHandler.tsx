@@ -2,8 +2,7 @@
 
 import { useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import browserLogger from '../../lib/logger/client';
-import { setCorrelationId } from '../../lib/logger/correlation';
+import { logger as browserLogger, setCorrelationId } from '@feature/logging';
 
 export default function GlobalErrorHandler() {
   const { data: session } = useSession();

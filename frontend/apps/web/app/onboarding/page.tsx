@@ -9,9 +9,9 @@ export default async function OnboardingPage() {
     redirect('/register');
   }
 
-  if (session.user.registrationError) {
-    redirect('/register?error=registration_failed');
-  }
+  // if (session.user.registrationError) {
+  //   redirect('/register?error=registration_failed');
+  // }
 
   if (!session.user.onboardingRequestId) {
     redirect('/dashboard');
