@@ -44,7 +44,11 @@ export default function OnboardingPoller({ requestId, correlationId }: Props) {
     queryKey: ['onboarding-status', requestId],
     queryFn: async () => {
       const response = await getOnboardingStatus({ requestId: requestId! });
-      log.info({ response })
+      if (!response.success) {
+        log.info(response.message + " " + JSON.stringify(response.data))
+      } else {
+        log.info(JSON.stringify(response.data))
+      }
       return response.data;
     },
     enabled: !!requestId,

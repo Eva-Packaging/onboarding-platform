@@ -8,6 +8,7 @@ import xyz.catuns.onboarding.user.api.dto.TokenExchangeRequest;
 import xyz.catuns.onboarding.user.api.dto.TokenResponse;
 import xyz.catuns.onboarding.user.client.GitHubApiClient;
 import xyz.catuns.onboarding.user.client.GitHubUserResponse;
+import xyz.catuns.onboarding.user.domain.ExternalIdentity;
 import xyz.catuns.onboarding.user.domain.ProviderKey;
 import xyz.catuns.onboarding.user.exception.GitHubAuthenticationException;
 import xyz.catuns.onboarding.user.repository.ExternalIdentityRepository;
@@ -37,13 +38,15 @@ public class TokenExchangeService {
         GitHubUserResponse githubUser = verifyGitHubToken(request.getGithubAccessToken());
         String githubUserId = String.valueOf(githubUser.id());
 
-        identityRepository
+        ExternalIdentity identity = identityRepository
                 .findByProvider_ProviderKeyAndExternalUserId(ProviderKey.GITHUB, githubUserId)
                 .orElseThrow(() -> new NoSuchElementException(
                         "No registered user found for GitHub account: " + githubUser.login()));
 
+        String internalUserId = identity.getUserProfile().getId().toString();
+
         JwtToken jwtToken = tokenProvider.generate(
-                new Payload(githubUserId, UUID.randomUUID().toString()));
+                new Payload(internalUserId, UUID.randomUUID().toString()));
 
         long expiresIn = Duration.between(Instant.now(), jwtToken.expiration()).getSeconds();
         return TokenResponse.builder()

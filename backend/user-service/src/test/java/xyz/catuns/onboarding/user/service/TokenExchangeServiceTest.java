@@ -12,6 +12,7 @@ import xyz.catuns.onboarding.user.client.GitHubApiClient;
 import xyz.catuns.onboarding.user.client.GitHubUserResponse;
 import xyz.catuns.onboarding.user.domain.ExternalIdentity;
 import xyz.catuns.onboarding.user.domain.ProviderKey;
+import xyz.catuns.onboarding.user.domain.UserProfile;
 import xyz.catuns.onboarding.user.exception.GitHubAuthenticationException;
 import xyz.catuns.onboarding.user.repository.ExternalIdentityRepository;
 import xyz.catuns.spring.jwt.core.model.JwtToken;
@@ -20,6 +21,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -27,6 +29,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 class TokenExchangeServiceTest {
+
+    private static final UUID PROFILE_ID = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
 
     private GitHubApiClient gitHubApiClient;
     private ExternalIdentityRepository identityRepository;
@@ -55,14 +59,14 @@ class TokenExchangeServiceTest {
     }
 
     @Test
-    void exchange_usesGithubUserIdAsJwtSubject() {
+    void exchange_usesInternalProfileIdAsJwtSubject() {
         stubGitHubSuccess(99999L, "another-user");
         stubIdentityFound();
         when(tokenProvider.generate(any())).thenReturn(jwt());
 
         service.exchange(request("gho_token"));
 
-        verify(tokenProvider).generate(argThat(p -> "99999".equals(p.userId())));
+        verify(tokenProvider).generate(argThat(p -> PROFILE_ID.toString().equals(p.userId())));
     }
 
     @Test
@@ -143,8 +147,12 @@ class TokenExchangeServiceTest {
     }
 
     private void stubIdentityFound() {
+        UserProfile profile = mock(UserProfile.class);
+        when(profile.getId()).thenReturn(PROFILE_ID);
+        ExternalIdentity identity = mock(ExternalIdentity.class);
+        when(identity.getUserProfile()).thenReturn(profile);
         when(identityRepository.findByProvider_ProviderKeyAndExternalUserId(any(), any()))
-                .thenReturn(Optional.of(mock(ExternalIdentity.class)));
+                .thenReturn(Optional.of(identity));
     }
 
     private TokenExchangeRequest request(String accessToken) {

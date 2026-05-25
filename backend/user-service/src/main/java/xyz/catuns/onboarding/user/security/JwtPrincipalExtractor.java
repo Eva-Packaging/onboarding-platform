@@ -17,7 +17,7 @@ public class JwtPrincipalExtractor {
         this.tokenProvider = tokenProvider;
     }
 
-    public String extractGithubUserId(HttpServletRequest request) {
+    public String extractUserId(HttpServletRequest request) {
         String token = extractBearerToken(request);
         String userId = tokenProvider.validate(token).userId();
         if (userId == null) {
