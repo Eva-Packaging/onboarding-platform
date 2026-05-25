@@ -1,6 +1,9 @@
 import { ApiClient, type ApiResponse, ApiError } from '@client/api-client';
 import { BACKEND_API_URL } from './env';
+import { logger } from '@feature/logging/server';
 const json = require('../../../package.json');
+
+const log = logger.child({ module: 'base-client' });
 
 /**
  * Centralized API client configuration
@@ -15,17 +18,14 @@ const apiClient = new ApiClient({
   baseURL: BACKEND_API_URL,
   enableRefreshToken: false,
   onUnauthorized: async () => {
-    console.log('[base-client] Unauthorized');
+    log.info('Unauthorized');
   },
   onRefreshTokenExpired: async () => {
-    console.log('[base-client] Refresh token expired');
+    log.info('Refresh token expired');
   },
   onAuthenticated: async (config) => {
-    console.log(
-      '[base-client]',
-      config.method.toUpperCase(),
-      config.url,
-      config.data ?? '',
+    log.info(
+      `${config.method.toUpperCase()} ${config.url} ${config.data ?? ""}`,
     );
   },
   onRefreshToken: async (originalRequest) => {

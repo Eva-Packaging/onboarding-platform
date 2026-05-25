@@ -27,6 +27,7 @@
       "@client/api-client/*": ["clients/api-client/src/*"],
       "@feature/logging": ["features/logging/src/index.ts"],
       "@feature/logging/server": ["features/logging/src/server.ts"],
+      "@feature/logging/config": ["features/logging/src/config.ts"],
       "@feature/logging/*": ["features/logging/src/*"]
     }
   },

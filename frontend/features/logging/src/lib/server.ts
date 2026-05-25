@@ -1,20 +1,6 @@
 import pino from 'pino';
+import { pinoOptions } from '../config';
 
-const isDev = process.env.NODE_ENV !== 'production';
-
-const logger = pino({
-  base: { service: 'web' },
-  level: 'info',
-  ...(isDev && {
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        translateTime: 'SYS:standard',
-        ignore: 'pid,hostname',
-      },
-    },
-  }),
-});
+const logger = pino(pinoOptions);
 
 export default logger;

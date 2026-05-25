@@ -8,6 +8,9 @@ import type { GetOnboardingStatusResponse } from '@feature/base/server';
 import OnboardingStatusBanner from './OnboardingStatusBanner';
 import StepList from './StepList';
 import CorrelationIdBadge from './CorrelationIdBadge';
+import { logger } from '@feature/logging';
+
+const log = logger.child({ module: 'OnboardingPoller' });
 
 export const TERMINAL_STATES = new Set([
   'COMPLETED',
@@ -41,6 +44,7 @@ export default function OnboardingPoller({ requestId, correlationId }: Props) {
     queryKey: ['onboarding-status', requestId],
     queryFn: async () => {
       const response = await getOnboardingStatus({ requestId: requestId! });
+      log.info({ response })
       return response.data;
     },
     enabled: !!requestId,
