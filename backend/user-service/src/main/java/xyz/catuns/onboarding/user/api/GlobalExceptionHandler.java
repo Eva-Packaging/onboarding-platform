@@ -4,6 +4,7 @@ import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -43,6 +44,13 @@ public class GlobalExceptionHandler {
         ex.getConstraintViolations().forEach(v ->
                 details.put(v.getPropertyPath().toString(), v.getMessage()));
         return buildResponse(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Constraint violation", details);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    ResponseEntity<ErrorResponse> handleConstraintViolation(DataIntegrityViolationException ex) {
+        Map<String, Object> details = new HashMap<>();
+        log.error("DataIntegrityViolation {}", ex.getMessage());
+        return buildResponse(HttpStatus.CONFLICT, "DATA_INTEGRITY_VIOLATION", "Data integrity violation", details);
     }
 
     @ExceptionHandler(DuplicateRegistrationException.class)
