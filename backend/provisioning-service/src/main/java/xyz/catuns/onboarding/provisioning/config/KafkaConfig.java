@@ -109,9 +109,4 @@ class KafkaConfig {
                 .config(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)
                 .build();
     }
-
-    @Bean
-    public KafkaConsumerMetrics kafkaConsumerMetrics() {
-        return new KafkaConsumerMetrics();
-    }
 }
