@@ -31,8 +31,8 @@ Recommended subject examples:
 
 ```text
 edu.user.registered.v1-value
-xyz.catuns.onboarding.events.UserRegisteredV1
-xyz.catuns.onboarding.events.IdentityCorrelationRequestedV1
+xyz.catuns.onboarding.common.events.UserRegisteredV1
+xyz.catuns.onboarding.common.events.IdentityCorrelationRequestedV1
 ```
 
 ### Event naming
@@ -94,7 +94,7 @@ This split matches the asynchronous boundaries in the system design: GitHub memb
 {
   "type": "record",
   "name": "UserRegisteredV1",
-  "namespace": "xyz.catuns.onboarding.events",
+  "namespace": "xyz.catuns.onboarding.common.events",
   "fields": [
     { "name": "eventId", "type": "string" },
     { "name": "eventType", "type": "string", "default": "UserRegisteredV1" },
@@ -125,7 +125,7 @@ This split matches the asynchronous boundaries in the system design: GitHub memb
 {
   "type": "record",
   "name": "IdentityCorrelationRequestedV1",
-  "namespace": "xyz.catuns.onboarding.events",
+  "namespace": "xyz.catuns.onboarding.common.events",
   "fields": [
     { "name": "eventId", "type": "string" },
     { "name": "eventType", "type": "string", "default": "IdentityCorrelationRequestedV1" },
@@ -154,7 +154,7 @@ This split matches the asynchronous boundaries in the system design: GitHub memb
 {
   "type": "record",
   "name": "IdentityCorrelationCompletedV1",
-  "namespace": "xyz.catuns.onboarding.events",
+  "namespace": "xyz.catuns.onboarding.common.events",
   "fields": [
     { "name": "eventId", "type": "string" },
     { "name": "eventType", "type": "string", "default": "IdentityCorrelationCompletedV1" },
@@ -181,7 +181,7 @@ This split matches the asynchronous boundaries in the system design: GitHub memb
 {
   "type": "record",
   "name": "IdentityCorrelationFailedV1",
-  "namespace": "xyz.catuns.onboarding.events",
+  "namespace": "xyz.catuns.onboarding.common.events",
   "fields": [
     { "name": "eventId", "type": "string" },
     { "name": "eventType", "type": "string", "default": "IdentityCorrelationFailedV1" },
@@ -205,7 +205,7 @@ This split matches the asynchronous boundaries in the system design: GitHub memb
 {
   "type": "record",
   "name": "GithubProvisioningRequestedV1",
-  "namespace": "xyz.catuns.onboarding.events",
+  "namespace": "xyz.catuns.onboarding.common.events",
   "fields": [
     { "name": "eventId", "type": "string" },
     { "name": "eventType", "type": "string", "default": "GithubProvisioningRequestedV1" },
@@ -233,7 +233,7 @@ This event supports GitHub team-assignment work, which is important because GitH
 {
   "type": "record",
   "name": "GithubProvisioningCompletedV1",
-  "namespace": "xyz.catuns.onboarding.events",
+  "namespace": "xyz.catuns.onboarding.common.events",
   "fields": [
     { "name": "eventId", "type": "string" },
     { "name": "eventType", "type": "string", "default": "GithubProvisioningCompletedV1" },
@@ -262,7 +262,7 @@ Expected `membershipState` values may include `ACTIVE`, `PENDING`, or `FAILED`, 
 {
   "type": "record",
   "name": "AtlassianProvisioningRequestedV1",
-  "namespace": "xyz.catuns.onboarding.events",
+  "namespace": "xyz.catuns.onboarding.common.events",
   "fields": [
     { "name": "eventId", "type": "string" },
     { "name": "eventType", "type": "string", "default": "AtlassianProvisioningRequestedV1" },
@@ -290,7 +290,7 @@ This event models Atlassian group provisioning, which fits Atlassian's documente
 {
   "type": "record",
   "name": "AtlassianProvisioningCompletedV1",
-  "namespace": "xyz.catuns.onboarding.events",
+  "namespace": "xyz.catuns.onboarding.common.events",
   "fields": [
     { "name": "eventId", "type": "string" },
     { "name": "eventType", "type": "string", "default": "AtlassianProvisioningCompletedV1" },
@@ -316,7 +316,7 @@ This event models Atlassian group provisioning, which fits Atlassian's documente
 {
   "type": "record",
   "name": "OnboardingCompletedV1",
-  "namespace": "xyz.catuns.onboarding.events",
+  "namespace": "xyz.catuns.onboarding.common.events",
   "fields": [
     { "name": "eventId", "type": "string" },
     { "name": "eventType", "type": "string", "default": "OnboardingCompletedV1" },
@@ -339,7 +339,7 @@ This event models Atlassian group provisioning, which fits Atlassian's documente
 {
   "type": "record",
   "name": "OnboardingFailedV1",
-  "namespace": "xyz.catuns.onboarding.events",
+  "namespace": "xyz.catuns.onboarding.common.events",
   "fields": [
     { "name": "eventId", "type": "string" },
     { "name": "eventType", "type": "string", "default": "OnboardingFailedV1" },

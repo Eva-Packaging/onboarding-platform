@@ -1,0 +1,303 @@
+{
+  "summary": "Phase 4: Kafka Event Foundation",
+  "description": "Establish the full Kafka event backbone for the onboarding platform. All Avro schemas are centralized in <backend/common/src/main/avro> under the namespace xyz.catuns.onboarding.common.events. Each microservice owns its Kafka configuration — producer factory, consumer factory, listener container factory, topic declarations, and error handling — as a local @Configuration class, following the pattern already established by <backend/user-service/src/main/java/xyz/catuns/onboarding/user/config/KafkaConfig.java>. Topic names are injected via the app.kafka.topics.* property namespace and topic creation uses KafkaTopicProperties for replicas and partitions. The outbox publisher pattern from user-service is replicated in onboarding-service and provisioning-service.",
+  "labels": ["kafka", "avro", "event-driven", "phase-4", "backend", "outbox"],
+  "priority": "High",
+  "userType": "operations engineer",
+  "functionality": "have a reliable, schema-governed Kafka event backbone connecting all onboarding microservices",
+  "benefit": "so that provisioning workflows execute fully asynchronously, domain writes and event publication stay transactionally consistent via the outbox pattern, and each service controls its own Kafka configuration independently",
+  "stories": [
+    {
+      "summary": "Centralize Avro schemas in backend/common with updated namespace",
+      "description": "Create all 10 Avro schema definitions inside <backend/common/src/main/avro>. Set the namespace to xyz.catuns.onboarding.common.events across every schema to match the common module package root. Configure the avro-maven-plugin in <backend/common/pom.xml> to generate Java classes from <src/main/avro> into <target/generated-sources/avro>. Add the io.confluent kafka-avro-serializer dependency at compile scope to common so all services receive it transitively. Update <docs/schemas/kafka-event-schema.md> to reflect the new namespace.\n\nSchemas to create: UserRegisteredV1, IdentityCorrelationRequestedV1, IdentityCorrelationCompletedV1, IdentityCorrelationFailedV1, GithubProvisioningRequestedV1, GithubProvisioningCompletedV1, AtlassianProvisioningRequestedV1, AtlassianProvisioningCompletedV1, OnboardingCompletedV1, OnboardingFailedV1.",
+      "labels": ["avro", "schema", "common", "phase-4"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Avro schemas compile and generate Java classes",
+          "given": "all 10 .avsc files are present in backend/common/src/main/avro with namespace xyz.catuns.onboarding.common.events",
+          "when": "mvn generate-sources is run from backend/common",
+          "then": "Java record classes are generated under xyz/catuns/onboarding/common/events and the module compiles without errors"
+        },
+        {
+          "scenario": "Namespace matches common module package",
+          "given": "a generated Avro class such as UserRegisteredV1",
+          "when": "its package declaration is inspected",
+          "then": "it reads xyz.catuns.onboarding.common.events"
+        },
+        {
+          "scenario": "Services resolve Avro types via common dependency",
+          "given": "user-service, onboarding-service, and provisioning-service each declare onboarding-common as a dependency",
+          "when": "each service is compiled",
+          "then": "they can import xyz.catuns.onboarding.common.events.UserRegisteredV1 and all other generated types without additional dependencies"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add avro-maven-plugin and kafka-avro-serializer to common pom.xml",
+          "description": "Add the org.apache.avro avro-maven-plugin to <backend/common/pom.xml> with sourceDirectory <src/main/avro> and outputDirectory <target/generated-sources/avro>. Add io.confluent kafka-avro-serializer at compile scope. Pin Confluent version to match the broker version declared in <infra/docker/docker-compose.yml>."
+        },
+        {
+          "summary": "Write UserRegisteredV1.avsc",
+          "description": "Create <backend/common/src/main/avro/UserRegisteredV1.avsc> with namespace xyz.catuns.onboarding.common.events. Fields: eventId, eventType (default UserRegisteredV1), eventVersion (default 1), occurredAt, correlationId, producer, userId, onboardingRequestId, displayName, primaryEmail, githubUserId, githubLogin, roleKeys (array of string, default [])."
+        },
+        {
+          "summary": "Write identity correlation Avro schemas",
+          "description": "Create <backend/common/src/main/avro/IdentityCorrelationRequestedV1.avsc>, <IdentityCorrelationCompletedV1.avsc>, and <IdentityCorrelationFailedV1.avsc> with namespace xyz.catuns.onboarding.common.events. Fields per <docs/schemas/kafka-event-schema.md>."
+        },
+        {
+          "summary": "Write provisioning Avro schemas",
+          "description": "Create <backend/common/src/main/avro/GithubProvisioningRequestedV1.avsc>, <GithubProvisioningCompletedV1.avsc>, <AtlassianProvisioningRequestedV1.avsc>, and <AtlassianProvisioningCompletedV1.avsc> with namespace xyz.catuns.onboarding.common.events."
+        },
+        {
+          "summary": "Write lifecycle Avro schemas",
+          "description": "Create <backend/common/src/main/avro/OnboardingCompletedV1.avsc> and <OnboardingFailedV1.avsc> with namespace xyz.catuns.onboarding.common.events."
+        },
+        {
+          "summary": "Update kafka-event-schema.md namespace",
+          "description": "Replace all occurrences of xyz.catuns.onboarding.events with xyz.catuns.onboarding.common.events in <docs/schemas/kafka-event-schema.md>."
+        }
+      ]
+    },
+    {
+      "summary": "Update user-service KafkaConfig for Avro and wire outbox publisher to Avro serialization",
+      "description": "The <backend/user-service/src/main/java/xyz/catuns/onboarding/user/config/KafkaConfig.java> class already exists and creates a ProducerFactory, KafkaTemplate, and NewTopic beans. This story updates it to wire the KafkaAvroSerializer into the ProducerFactory config map and moves the edu.identity.correlation.v1 topic declaration to onboarding-service, which is the correct producer owner.\n\nThe existing <backend/user-service/src/main/java/xyz/catuns/onboarding/user/outbox/OutboxEventPublisher.java> sends event.getPayload() — a raw JSON string — as the Kafka record value. With KafkaAvroSerializer wired, the value must be a SpecificRecord, not a String. Update the publisher to deserialize the JSON payload into the appropriate Avro generated class before sending.\n\nTopic produced by user-service: edu.user.registered.v1 (already declared as app.kafka.topics.user-registered).",
+      "labels": ["kafka", "avro", "user-service", "outbox", "phase-4"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "ProducerFactory is wired with KafkaAvroSerializer",
+          "given": "the updated KafkaConfig in user-service",
+          "when": "the application context starts",
+          "then": "the ProducerFactory config map contains KafkaAvroSerializer as the value serializer and schema.registry.url from spring.kafka.properties"
+        },
+        {
+          "scenario": "OutboxEventPublisher sends an Avro record for UserRegisteredV1",
+          "given": "an unpublished outbox_event row with event_type = UserRegisteredV1 and a JSON payload",
+          "when": "the scheduled publisher runs",
+          "then": "the JSON payload is deserialized into a UserRegisteredV1 Avro record and sent to the edu.user.registered.v1 topic"
+        },
+        {
+          "scenario": "idCorrelationTopic bean is removed from user-service",
+          "given": "the updated KafkaConfig in user-service",
+          "when": "the bean definitions are inspected",
+          "then": "there is no NewTopic bean for edu.identity.correlation.v1 — it is declared in onboarding-service"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Update KafkaConfig producerFactory to include KafkaAvroSerializer",
+          "description": "In <backend/user-service/src/main/java/xyz/catuns/onboarding/user/config/KafkaConfig.java>, update the producerFactory bean. After calling kafkaProperties.buildProducerProperties(), add ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG = KafkaAvroSerializer.class to the config map before constructing DefaultKafkaProducerFactory. Remove the idCorrelationTopic bean — it will be declared in onboarding-service."
+        },
+        {
+          "summary": "Update OutboxEventPublisher to deserialize JSON payload to Avro record",
+          "description": "In <backend/user-service/src/main/java/xyz/catuns/onboarding/user/outbox/OutboxEventPublisher.java>, add a dispatch step before the ProducerRecord is built. Check event.getEventType() and use ObjectMapper to deserialize event.getPayload() into the matching Avro SpecificRecord (e.g. UserRegisteredV1). Pass the Avro record as the ProducerRecord value. Throw IllegalStateException for unrecognized event types."
+        },
+        {
+          "summary": "Remove idCorrelationTopic from user-service application config and set broker-safe topic properties",
+          "description": "Remove the app.kafka.topics.id-correlation property from user-service application configuration and the corresponding @Value field and NewTopic bean from <KafkaConfig.java>. In user-service application.yml set app.kafka.partitions: 1 and app.kafka.replicas: 1 — the local broker is a single-node KRaft cluster (KAFKA_NODE_ID: 1 in <infra/docker/docker-compose.yml>) and will reject topic creation if replicas exceed the broker count. The existing userRegisteredTopic bean reads these values from KafkaTopicProperties so no Java change is required."
+        },
+        {
+          "summary": "Update OutboxEventPublisherTest for Avro record assertion",
+          "description": "Update <backend/user-service/src/test/java/xyz/catuns/onboarding/user/outbox/OutboxEventPublisherTest.java> to assert that the published Kafka record value is a UserRegisteredV1 SpecificRecord instance, not a raw String."
+        }
+      ]
+    },
+    {
+      "summary": "Create KafkaConfig in onboarding-service with producer, consumer, and topic declarations",
+      "description": "Create <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/config/KafkaConfig.java> following the same pattern as user-service. Declare a ProducerFactory with KafkaAvroSerializer, a ConsumerFactory with KafkaAvroDeserializer and specific.avro.reader=true, a ConcurrentKafkaListenerContainerFactory, and NewTopic beans for all topics produced by onboarding-service.\n\nTopics owned by onboarding-service:\n- edu.identity.correlation.v1 (app.kafka.topics.id-correlation)\n- edu.provisioning.github.v1 (app.kafka.topics.github-provisioning)\n- edu.provisioning.atlassian.v1 (app.kafka.topics.atlassian-provisioning)\n- edu.onboarding.lifecycle.v1 (app.kafka.topics.onboarding-lifecycle)\n\nSet ack-mode to RECORD on the listener container factory so each offset commits individually after its @Transactional handler method returns, preventing uncommitted DB writes from being masked by a batch offset commit.",
+      "labels": ["kafka", "onboarding-service", "infrastructure", "phase-4"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "All four onboarding-service topics are created on startup",
+          "given": "onboarding-service starts with Kafka available",
+          "when": "the Kafka admin client lists topics",
+          "then": "edu.identity.correlation.v1, edu.provisioning.github.v1, edu.provisioning.atlassian.v1, and edu.onboarding.lifecycle.v1 are present with partitions and replicas from KafkaTopicProperties"
+        },
+        {
+          "scenario": "ConsumerFactory is wired with specific.avro.reader=true",
+          "given": "the KafkaConfig consumer factory bean",
+          "when": "its configuration map is inspected",
+          "then": "specific.avro.reader is true and value.deserializer is KafkaAvroDeserializer"
+        },
+        {
+          "scenario": "Listener container uses RECORD ack mode",
+          "given": "the ConcurrentKafkaListenerContainerFactory bean",
+          "when": "its container properties are inspected",
+          "then": "ackMode is AckMode.RECORD"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create KafkaConfig.java in onboarding-service",
+          "description": "Create <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/config/KafkaConfig.java> as a package-private @Configuration class. Define producerFactory(KafkaProperties) that calls kafkaProperties.buildProducerProperties(), adds KafkaAvroSerializer as value.serializer, and constructs DefaultKafkaProducerFactory. Define kafkaTemplate(ProducerFactory) wrapping it."
+        },
+        {
+          "summary": "Add ConsumerFactory and ConcurrentKafkaListenerContainerFactory beans",
+          "description": "In KafkaConfig, define consumerFactory(KafkaProperties) that calls kafkaProperties.buildConsumerProperties(), adds KafkaAvroDeserializer as value.deserializer and specific.avro.reader=true, and constructs DefaultKafkaConsumerFactory. Define kafkaListenerContainerFactory(ConsumerFactory) constructing ConcurrentKafkaListenerContainerFactory with AckMode.RECORD."
+        },
+        {
+          "summary": "Declare NewTopic beans for onboarding-service owned topics with per-topic config",
+          "description": "In KafkaConfig, inject @Value fields for app.kafka.topics.id-correlation, app.kafka.topics.github-provisioning, app.kafka.topics.atlassian-provisioning, and app.kafka.topics.onboarding-lifecycle. Create a NewTopic bean for each using TopicBuilder with replicas and partitions from appProperties.getKafka().\n\nApply per-topic TopicConfig overrides:\n- id-correlation, github-provisioning, atlassian-provisioning: standard config, no overrides beyond partitions and replicas.\n- onboarding-lifecycle: add TopicConfig.RETENTION_MS_CONFIG = \"1209600000\" (14 days) — lifecycle outcome events are audit-relevant and should outlive the default 7-day broker retention.\n\nExample for the lifecycle topic:\n```\nTopicBuilder.name(onboardingLifecycleTopicName)\n    .replicas(topicProperties.getReplicas())\n    .partitions(topicProperties.getPartitions())\n    .config(TopicConfig.RETENTION_MS_CONFIG, \"1209600000\")\n    .build()\n```"
+        },
+        {
+          "summary": "Add app.kafka.topics properties to onboarding-service application.yml",
+          "description": "Create <backend/onboarding-service/src/main/resources/application.yml>. Set spring.kafka.bootstrap-servers, spring.kafka.properties.schema.registry.url, and spring.kafka.consumer.group-id: onboarding-service. Set app.kafka.topics entries for id-correlation, github-provisioning, atlassian-provisioning, and onboarding-lifecycle using the canonical topic names from <docs/schemas/kafka-event-schema.md>. Set app.kafka.partitions: 1 and app.kafka.replicas: 1 — mandatory for the single-node local broker; these values are read by KafkaTopicProperties and applied to every NewTopic bean."
+        }
+      ]
+    },
+    {
+      "summary": "Implement event consumers and outbox publisher in onboarding-service",
+      "description": "Wire all inbound Kafka consumers and the outbox publisher in onboarding-service.\n\nConsumers:\n- UserRegisteredV1 from edu.user.registered.v1: in a @Transactional method, resolve the onboarding request by userId and write three outbox_event rows — IdentityCorrelationRequestedV1, GithubProvisioningRequestedV1, AtlassianProvisioningRequestedV1.\n- GithubProvisioningCompletedV1 from edu.provisioning.github.v1: update the GitHub step status to COMPLETED or FAILED.\n- AtlassianProvisioningCompletedV1 from edu.provisioning.atlassian.v1: update the Atlassian step status.\n- IdentityCorrelationCompletedV1 from edu.identity.correlation.v1: persist atlassianIdentityId and matchStrategy.\n- IdentityCorrelationFailedV1 from edu.identity.correlation.v1: set the identity step status to FAILED.\n\nAfter every step update, check whether all steps have reached a terminal state and write OnboardingCompletedV1 or OnboardingFailedV1 to the outbox.\n\nOutbox publisher: replicate the @Scheduled pattern from <backend/user-service/src/main/java/xyz/catuns/onboarding/user/outbox/OutboxEventPublisher.java>. Map each event_type to its target topic using app.kafka.topics.* values and deserialize the JSON payload into the appropriate Avro SpecificRecord before sending.",
+      "labels": ["kafka", "consumer", "outbox", "onboarding-service", "event-handler", "phase-4"],
+      "priority": "High",
+      "storyPoints": 8,
+      "acceptanceCriteria": [
+        {
+          "scenario": "UserRegisteredV1 triggers three outbox rows in one transaction",
+          "given": "a UserRegisteredV1 Avro record is published to edu.user.registered.v1",
+          "when": "the onboarding-service consumer processes it",
+          "then": "IdentityCorrelationRequestedV1, GithubProvisioningRequestedV1, and AtlassianProvisioningRequestedV1 outbox rows are written in a single DB transaction"
+        },
+        {
+          "scenario": "Completion event advances step state",
+          "given": "a GithubProvisioningCompletedV1 record with success = true arrives",
+          "when": "the consumer processes it",
+          "then": "the GitHub provisioning onboarding_step transitions to COMPLETED"
+        },
+        {
+          "scenario": "All steps completed triggers OnboardingCompletedV1 outbox entry",
+          "given": "all onboarding steps for a request reach COMPLETED",
+          "when": "the last step completion handler runs",
+          "then": "an OnboardingCompletedV1 outbox row is written in the same transaction"
+        },
+        {
+          "scenario": "Outbox publisher routes each event type to its correct topic",
+          "given": "unpublished outbox rows of types IdentityCorrelationRequestedV1 and GithubProvisioningRequestedV1",
+          "when": "the scheduled publisher runs",
+          "then": "each record is sent to its mapped topic and the rows are marked published = true"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create UserRegisteredEventHandler @KafkaListener",
+          "description": "Create <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/kafka/UserRegisteredEventHandler.java> with @KafkaListener(topics = \"${app.kafka.topics.user-registered}\"). In a @Transactional method, resolve the onboarding request by userId and write three outbox_event rows using JSON payloads for IdentityCorrelationRequestedV1, GithubProvisioningRequestedV1, and AtlassianProvisioningRequestedV1. Set the topic field on each outbox row to the appropriate app.kafka.topics value."
+        },
+        {
+          "summary": "Create provisioning completion event handlers",
+          "description": "Create <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/kafka/GithubProvisioningCompletedEventHandler.java> with @KafkaListener(topics = \"${app.kafka.topics.github-provisioning}\") and a matching handler for AtlassianProvisioningCompletedV1. Each handler calls a shared OnboardingStepService to transition the step state and check terminal conditions."
+        },
+        {
+          "summary": "Create identity correlation completion and failure handlers",
+          "description": "Create <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/kafka/IdentityCorrelationEventHandler.java> with @KafkaListener(topics = \"${app.kafka.topics.id-correlation}\"). Dispatch on event type: IdentityCorrelationCompletedV1 persists atlassianIdentityId and matchStrategy; IdentityCorrelationFailedV1 sets the step to FAILED with reasonCode."
+        },
+        {
+          "summary": "Implement terminal state check and lifecycle event outbox write",
+          "description": "Add a method to OnboardingStepService that checks whether all steps for a request are terminal after any step update. If all COMPLETED, write an OnboardingCompletedV1 JSON payload to outbox_event with topic = app.kafka.topics.onboarding-lifecycle. If any FAILED with retries exhausted, write OnboardingFailedV1."
+        },
+        {
+          "summary": "Create OutboxEventPublisher in onboarding-service",
+          "description": "Create <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/outbox/OutboxEventPublisher.java> following the pattern in <backend/user-service/src/main/java/xyz/catuns/onboarding/user/outbox/OutboxEventPublisher.java>. For each unpublished row, deserialize the JSON payload into the matching Avro SpecificRecord and send via KafkaTemplate. Topic is read from event.getTopic() as with user-service."
+        },
+        {
+          "summary": "Write integration tests for onboarding-service event handlers",
+          "description": "Write @SpringBootTest tests using embedded Kafka and TestContainers Postgres. Publish each inbound event type and assert the expected outbox rows and step state transitions result."
+        }
+      ]
+    },
+    {
+      "summary": "Create KafkaConfig in provisioning-service with producer, consumer, and error handler",
+      "description": "Create <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/config/KafkaConfig.java> following the same per-service pattern. Provisioning-service does not own any topics — it consumes from and publishes completion events back to the topics declared by user-service and onboarding-service — so no NewTopic beans are needed.\n\nAdd a CommonErrorHandler bean with ExponentialBackOff tuned for external API latency (initial 2s, multiplier 2.0, max 3 attempts) and a DeadLetterPublishingRecoverer that routes to a .DLT suffixed topic. This error handler is specific to provisioning-service because it calls external provider APIs in Phase 5 and 6 — the retry timing is different from onboarding-service's internal DB operations.\n\nAlso add onboarding-common as a dependency to <backend/provisioning-service/pom.xml> so it can import the generated Avro types.",
+      "labels": ["kafka", "provisioning-service", "infrastructure", "error-handling", "phase-4"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "ProducerFactory and ConsumerFactory are wired with Avro serializers",
+          "given": "the KafkaConfig beans in provisioning-service",
+          "when": "the application context starts",
+          "then": "ProducerFactory uses KafkaAvroSerializer and ConsumerFactory uses KafkaAvroDeserializer with specific.avro.reader=true"
+        },
+        {
+          "scenario": "Error handler retries with exponential backoff before routing to DLT",
+          "given": "a @KafkaListener method throws a RuntimeException on a provisioning request record",
+          "when": "the DefaultErrorHandler processes the failure",
+          "then": "it retries up to 3 times with exponential backoff before publishing the failed record to the .DLT topic"
+        },
+        {
+          "scenario": "provisioning-service can import Avro generated types",
+          "given": "onboarding-common is declared as a dependency in provisioning-service pom.xml",
+          "when": "provisioning-service is compiled",
+          "then": "it can import GithubProvisioningRequestedV1 and AtlassianProvisioningRequestedV1 without errors"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add onboarding-common dependency to provisioning-service pom.xml",
+          "description": "Add xyz.catuns.onboarding onboarding-common 1.0-SNAPSHOT as a compile dependency in <backend/provisioning-service/pom.xml>."
+        },
+        {
+          "summary": "Create KafkaConfig.java in provisioning-service",
+          "description": "Create <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/config/KafkaConfig.java> as a package-private @Configuration class. Define producerFactory(KafkaProperties) adding KafkaAvroSerializer to the properties map. Define kafkaTemplate(ProducerFactory). Define consumerFactory(KafkaProperties) adding KafkaAvroDeserializer and specific.avro.reader=true."
+        },
+        {
+          "summary": "Add ConcurrentKafkaListenerContainerFactory, CommonErrorHandler, and DLT NewTopic beans",
+          "description": "In KafkaConfig, define a CommonErrorHandler bean: construct DeadLetterPublishingRecoverer with the KafkaTemplate routing to r.topic() + \".DLT\". Construct DefaultErrorHandler with ExponentialBackOff(2000L, 2.0) capped at 3 attempts. Define kafkaListenerContainerFactory(ConsumerFactory) with AckMode.RECORD and the CommonErrorHandler wired in.\n\nDeclare explicit NewTopic beans for the two DLT topics so they exist before any failed message is routed there. Inject @Value fields for app.kafka.topics.github-provisioning-dlt and app.kafka.topics.atlassian-provisioning-dlt. Create each DLT topic with partitions and replicas from KafkaTopicProperties and apply TopicConfig overrides:\n- RETENTION_MS_CONFIG = \"-1\" (infinite — dead-lettered provisioning failures must not expire until manually resolved)\n- CLEANUP_POLICY_CONFIG = TopicConfig.CLEANUP_POLICY_DELETE (prevent compaction so all failure records are preserved)\n\nExample:\n```\nTopicBuilder.name(githubProvisioningDltTopicName)\n    .replicas(topicProperties.getReplicas())\n    .partitions(topicProperties.getPartitions())\n    .config(TopicConfig.RETENTION_MS_CONFIG, \"-1\")\n    .config(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)\n    .build()\n```"
+        },
+        {
+          "summary": "Add app.kafka.topics and spring.kafka properties to provisioning-service application.yml",
+          "description": "Create <backend/provisioning-service/src/main/resources/application.yml>. Set spring.kafka.bootstrap-servers, spring.kafka.properties.schema.registry.url, and spring.kafka.consumer.group-id: provisioning-service. Set app.kafka.topics entries for github-provisioning and atlassian-provisioning (consumed topics — creation is owned by onboarding-service). Add app.kafka.topics.github-provisioning-dlt and app.kafka.topics.atlassian-provisioning-dlt for the DLT topic names (format: edu.provisioning.github.v1.DLT and edu.provisioning.atlassian.v1.DLT). Set app.kafka.partitions: 1 and app.kafka.replicas: 1 — mandatory for the single-node local broker."
+        }
+      ]
+    },
+    {
+      "summary": "Implement event consumers and outbox publisher in provisioning-service",
+      "description": "Wire inbound Kafka consumers and the outbox publisher in provisioning-service.\n\nAt this phase, provider calls are stubbed — the handler records an audit log entry and writes a completion event to the outbox. The stub prepares the service for real provider integration in Phase 5 and 6.\n\nConsumers:\n- GithubProvisioningRequestedV1 from edu.provisioning.github.v1: write a provisioning_audit_log row (provider = GITHUB, status = STUB_COMPLETED) and a GithubProvisioningCompletedV1 outbox row with success = true.\n- AtlassianProvisioningRequestedV1 from edu.provisioning.atlassian.v1: write a provisioning_audit_log row (provider = ATLASSIAN) and an AtlassianProvisioningCompletedV1 outbox row.\n\nOutbox publisher: replicate the @Scheduled pattern from user-service. Read the topic from event.getTopic(), deserialize JSON payload to the matching Avro SpecificRecord, and send via KafkaTemplate.",
+      "labels": ["kafka", "consumer", "outbox", "provisioning-service", "event-handler", "phase-4"],
+      "priority": "High",
+      "storyPoints": 8,
+      "acceptanceCriteria": [
+        {
+          "scenario": "GithubProvisioningRequestedV1 triggers audit log and completion outbox entry",
+          "given": "a GithubProvisioningRequestedV1 record arrives on edu.provisioning.github.v1",
+          "when": "the consumer processes it",
+          "then": "a provisioning_audit_log row with provider = GITHUB is written and a GithubProvisioningCompletedV1 outbox row with success = true is created in the same transaction"
+        },
+        {
+          "scenario": "AtlassianProvisioningRequestedV1 triggers audit log and completion outbox entry",
+          "given": "an AtlassianProvisioningRequestedV1 record arrives on edu.provisioning.atlassian.v1",
+          "when": "the consumer processes it",
+          "then": "a provisioning_audit_log row with provider = ATLASSIAN is written and an AtlassianProvisioningCompletedV1 outbox row with success = true is created"
+        },
+        {
+          "scenario": "Outbox publisher sends completion events back to their topics",
+          "given": "unpublished GithubProvisioningCompletedV1 and AtlassianProvisioningCompletedV1 outbox rows exist",
+          "when": "the scheduled publisher runs",
+          "then": "both records are sent to edu.provisioning.github.v1 and edu.provisioning.atlassian.v1 respectively and marked published = true"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create GithubProvisioningRequestedEventHandler @KafkaListener",
+          "description": "Create <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/kafka/GithubProvisioningRequestedEventHandler.java> with @KafkaListener(topics = \"${app.kafka.topics.github-provisioning}\"). In a @Transactional method, write a provisioning_audit_log row and an outbox_event row with event_type = GithubProvisioningCompletedV1, topic = app.kafka.topics.github-provisioning, and a JSON payload containing success = true and membershipState = ACTIVE."
+        },
+        {
+          "summary": "Create AtlassianProvisioningRequestedEventHandler @KafkaListener",
+          "description": "Create <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/kafka/AtlassianProvisioningRequestedEventHandler.java> with @KafkaListener(topics = \"${app.kafka.topics.atlassian-provisioning}\"). In a @Transactional method, write a provisioning_audit_log row and an outbox_event row with event_type = AtlassianProvisioningCompletedV1 and success = true."
+        },
+        {
+          "summary": "Create OutboxEventPublisher in provisioning-service",
+          "description": "Create <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/outbox/OutboxEventPublisher.java> following the pattern in <backend/user-service/src/main/java/xyz/catuns/onboarding/user/outbox/OutboxEventPublisher.java>. Dispatch on event_type: GithubProvisioningCompletedV1 → deserialize to Avro and send; AtlassianProvisioningCompletedV1 → same. Topic is read from event.getTopic()."
+        },
+        {
+          "summary": "Write integration tests for provisioning-service event consumers",
+          "description": "Write @SpringBootTest tests using embedded Kafka and TestContainers Postgres. Publish GithubProvisioningRequestedV1 and AtlassianProvisioningRequestedV1 and assert the correct audit log row, outbox row, and that the outbox publisher forwards the completion event to the expected topic."
+        }
+      ]
+    }
+  ]
+}

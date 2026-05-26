@@ -1,0 +1,20 @@
+{
+  "type": "record",
+  "name": "UserRegisteredV1",
+  "namespace": "xyz.catuns.onboarding.common.events",
+  "fields": [
+    { "name": "eventId",             "type": "string" },
+    { "name": "eventType",           "type": "string", "default": "UserRegisteredV1" },
+    { "name": "eventVersion",        "type": "int",    "default": 1 },
+    { "name": "occurredAt",          "type": "string" },
+    { "name": "correlationId",       "type": "string" },
+    { "name": "producer",            "type": "string" },
+    { "name": "userId",              "type": "string" },
+    { "name": "onboardingRequestId", "type": "string" },
+    { "name": "displayName",         "type": "string" },
+    { "name": "primaryEmail",        "type": "string" },
+    { "name": "githubUserId",        "type": "string" },
+    { "name": "githubLogin",         "type": "string" },
+    { "name": "roleKeys",            "type": { "type": "array", "items": "string" }, "default": [] }
+  ]
+}

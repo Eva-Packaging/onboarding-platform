@@ -2,6 +2,9 @@ app:
   kafka:
     partitions: 1
     replicas: 1
+    topics:
+      user-registered: edu.user.registered.v1
+      id-correlation: edu.identity.correlation.v1
   open-api:
     description: @project.description@
     title: @project.name@
