@@ -21,6 +21,7 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import xyz.catuns.onboarding.service.config.properties.AppProperties;
 import xyz.catuns.spring.base.properties.KafkaTopicProperties;
 
@@ -97,8 +98,9 @@ class KafkaConfig {
     @Bean
     public ConsumerFactory<String, SpecificRecord> consumerFactory(KafkaProperties kafkaProperties) {
         Map<String, Object> config = kafkaProperties.buildConsumerProperties(null);
-        config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
-        config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+//        config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
+        config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
+        config.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, KafkaAvroDeserializer.class);
         config.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
         config.put("schema.registry.url", schemaRegistryUrl);
         return new DefaultKafkaConsumerFactory<>(config);

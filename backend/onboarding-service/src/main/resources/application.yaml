@@ -42,6 +42,7 @@ spring:
     consumer:
       group-id: onboarding-service-group
       auto-offset-reset: earliest
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
     properties:
       schema-registry-url: ${SCHEMA_REGISTRY_URL:http://localhost:9090}
     template:
