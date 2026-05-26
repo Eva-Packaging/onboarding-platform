@@ -19,16 +19,23 @@ public class UserRegisteredV1PayloadBuilder {
         this.objectMapper = objectMapper;
     }
 
-    public String build(UUID userId, UUID correlationId, String githubUserId, String githubLogin,
-                        String primaryEmail, List<String> roleKeys, Instant registeredAt) {
+    public String build(UUID userId, String onboardingRequestId, String correlationId,
+                        String displayName, String githubUserId, String githubLogin,
+                        String primaryEmail, List<String> roleKeys, Instant occurredAt) {
         Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("eventId", UUID.randomUUID().toString());
+        payload.put("eventType", "UserRegisteredV1");
+        payload.put("eventVersion", 1);
+        payload.put("occurredAt", occurredAt.toString());
+        payload.put("correlationId", correlationId != null ? correlationId : "");
+        payload.put("producer", "user-service");
         payload.put("userId", userId.toString());
+        payload.put("onboardingRequestId", onboardingRequestId);
+        payload.put("displayName", displayName != null ? displayName : "");
+        payload.put("primaryEmail", primaryEmail != null ? primaryEmail : "");
         payload.put("githubUserId", githubUserId);
         payload.put("githubLogin", githubLogin);
-        payload.put("primaryEmail", primaryEmail);
-        payload.put("correlationId", correlationId.toString());
-        payload.put("roleKeys", roleKeys);
-        payload.put("registeredAt", registeredAt.toString());
+        payload.put("roleKeys", roleKeys != null ? roleKeys : List.of());
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException e) {
