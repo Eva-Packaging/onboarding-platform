@@ -13,12 +13,24 @@
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <jwt.starter.version>1.0.4-SNAPSHOT</jwt.starter.version>
+        <avro.version>1.11.4</avro.version>
+        <confluent.version>8.1.0</confluent.version>
     </properties>
 
     <dependencies>
         <dependency>
             <groupId>xyz.catuns.spring</groupId>
             <artifactId>jwt-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+            <version>${avro.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-avro-serializer</artifactId>
+            <version>${confluent.version}</version>
         </dependency>
     </dependencies>
 
@@ -33,5 +45,41 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro-maven-plugin</artifactId>
+                <version>${avro.version}</version>
+                <executions>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>schema</goal>
+                        </goals>
+                        <configuration>
+                            <sourceDirectory>${project.basedir}/src/main/avro</sourceDirectory>
+                            <outputDirectory>${project.build.directory}/generated-sources/avro</outputDirectory>
+                            <stringType>String</stringType>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <repositories>
+        <repository>
+            <id>repolite-releases</id>
+            <name>Catuns lite Repository</name>
+            <url>https://repolite.catuns.xyz/releases</url>
+        </repository>
+        <repository>
+            <id>confluent</id>
+            <name>Confluent Maven Repository</name>
+            <url>https://packages.confluent.io/maven/</url>
+        </repository>
+    </repositories>
 
 </project>

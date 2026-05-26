@@ -92,21 +92,25 @@ public class UserRegistrationService {
 
         UserProfile saved = profileRepo.save(profile);
 
-        UUID correlationId = UUID.randomUUID();
+        UUID onboardingRequestId = UUID.randomUUID();
+        String httpCorrelationId = MDC.get("correlationId");
 
         OutboxEvent outbox = new OutboxEvent();
         outbox.setAggregateType("UserProfile");
         outbox.setAggregateId(saved.getId());
         outbox.setEventType("UserRegisteredV1");
         outbox.setTopic("edu.user.registered.v1");
-        outbox.setCorrelationId(MDC.get("correlationId"));
+        outbox.setCorrelationId(httpCorrelationId);
         outbox.setPayload(payloadBuilder.build(
-                saved.getId(), correlationId,
+                saved.getId(),
+                onboardingRequestId.toString(),
+                httpCorrelationId,
+                request.getDisplayName(),
                 request.getGithubUserId(), request.getGithubLogin(),
                 request.getPrimaryEmail(), roleKeys, saved.getCreatedAt()
         ));
         outboxRepo.save(outbox);
         registrationCounter.increment();
-        return new RegistrationResult(saved.getId(), correlationId);
+        return new RegistrationResult(saved.getId(), onboardingRequestId);
     }
 }

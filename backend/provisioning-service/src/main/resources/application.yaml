@@ -2,6 +2,11 @@ app:
   kafka:
     partitions: 1
     replicas: 1
+    topics:
+      github-provisioning: edu.provisioning.github.v1
+      atlassian-provisioning: edu.provisioning.atlassian.v1
+      github-provisioning-dlt: edu.provisioning.github.v1.DLT
+      atlassian-provisioning-dlt: edu.provisioning.atlassian.v1.DLT
   open-api:
     description: @project.description@
     title: @project.name@
@@ -26,8 +31,6 @@ spring:
     producer:
       retries: 10
       acks: all
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
       properties:
         delivery:
           timeout: 60000
@@ -44,15 +47,10 @@ spring:
         enable:
           idempotence: true
     bootstrap-servers: ${BOOTSTRAP_SERVERS:localhost:9092}
+    properties:
+      schema-registry-url: ${SCHEMA_REGISTRY_URL:http://localhost:9090}
     consumer:
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      group-id: provisioning-service-group
-      properties:
-        spring:
-          json:
-            trusted:
-              packages: xyz.catuns.onboarding.provisioning.*
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      group-id: provisioning-service
     template:
       observation-enabled: true
     listener:

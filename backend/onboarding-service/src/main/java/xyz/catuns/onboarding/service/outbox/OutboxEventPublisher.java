@@ -1,16 +1,24 @@
 package xyz.catuns.onboarding.service.outbox;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import xyz.catuns.onboarding.common.events.AtlassianProvisioningRequestedV1;
+import xyz.catuns.onboarding.common.events.GithubProvisioningRequestedV1;
+import xyz.catuns.onboarding.common.events.IdentityCorrelationRequestedV1;
+import xyz.catuns.onboarding.common.events.OnboardingCompletedV1;
+import xyz.catuns.onboarding.common.events.OnboardingFailedV1;
 import xyz.catuns.onboarding.service.domain.OutboxEvent;
 import xyz.catuns.onboarding.service.repository.OutboxEventRepository;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Map;
 
 @Component
 public class OutboxEventPublisher {
@@ -18,11 +26,15 @@ public class OutboxEventPublisher {
     private static final Logger log = LoggerFactory.getLogger(OutboxEventPublisher.class);
 
     private final OutboxEventRepository outboxRepo;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final KafkaTemplate<String, SpecificRecord> kafkaTemplate;
+    private final ObjectMapper objectMapper;
 
-    public OutboxEventPublisher(OutboxEventRepository outboxRepo, KafkaTemplate<String, Object> kafkaTemplate) {
+    public OutboxEventPublisher(OutboxEventRepository outboxRepo,
+                                KafkaTemplate<String, SpecificRecord> kafkaTemplate,
+                                ObjectMapper objectMapper) {
         this.outboxRepo = outboxRepo;
         this.kafkaTemplate = kafkaTemplate;
+        this.objectMapper = objectMapper;
     }
 
     @Scheduled(fixedDelayString = "${app.outbox.poll-interval-ms:5000}")
@@ -32,10 +44,20 @@ public class OutboxEventPublisher {
                 log.warn("Skipping outbox event {} (type={}) — no topic set", event.getId(), event.getEventType());
                 return;
             }
-            ProducerRecord<String, Object> record = new ProducerRecord<>(
+
+            SpecificRecord avroRecord;
+            try {
+                avroRecord = toAvroRecord(event);
+            } catch (Exception e) {
+                log.error("Cannot convert outbox event {} (type={}) to Avro record: {}",
+                        event.getId(), event.getEventType(), e.getMessage());
+                return;
+            }
+
+            ProducerRecord<String, SpecificRecord> record = new ProducerRecord<>(
                     event.getTopic(),
                     event.getAggregateId().toString(),
-                    event.getPayload()
+                    avroRecord
             );
             if (event.getCorrelationId() != null) {
                 record.headers().add("X-Correlation-ID",
@@ -53,5 +75,78 @@ public class OutboxEventPublisher {
                 }
             });
         });
+    }
+
+    @SuppressWarnings("unchecked")
+    private SpecificRecord toAvroRecord(OutboxEvent event) throws Exception {
+        Map<String, Object> data = objectMapper.readValue(event.getPayload(), Map.class);
+        return switch (event.getEventType()) {
+            case "IdentityCorrelationRequestedV1" -> IdentityCorrelationRequestedV1.newBuilder()
+                    .setEventId((String) data.get("eventId"))
+                    .setEventType((String) data.get("eventType"))
+                    .setEventVersion(((Number) data.get("eventVersion")).intValue())
+                    .setOccurredAt((String) data.get("occurredAt"))
+                    .setCorrelationId((String) data.get("correlationId"))
+                    .setProducer((String) data.get("producer"))
+                    .setUserId((String) data.get("userId"))
+                    .setOnboardingRequestId((String) data.get("onboardingRequestId"))
+                    .setGithubIdentityId((String) data.get("githubIdentityId"))
+                    .setGithubLogin((String) data.get("githubLogin"))
+                    .setPrimaryEmail((String) data.get("primaryEmail"))
+                    .build();
+            case "GithubProvisioningRequestedV1" -> GithubProvisioningRequestedV1.newBuilder()
+                    .setEventId((String) data.get("eventId"))
+                    .setEventType((String) data.get("eventType"))
+                    .setEventVersion(((Number) data.get("eventVersion")).intValue())
+                    .setOccurredAt((String) data.get("occurredAt"))
+                    .setCorrelationId((String) data.get("correlationId"))
+                    .setProducer((String) data.get("producer"))
+                    .setUserId((String) data.get("userId"))
+                    .setOnboardingRequestId((String) data.get("onboardingRequestId"))
+                    .setGithubLogin((String) data.get("githubLogin"))
+                    .setGithubOrg((String) data.get("githubOrg"))
+                    .setGithubTeamSlug((String) data.get("githubTeamSlug"))
+                    .setProviderTargetId((String) data.get("providerTargetId"))
+                    .build();
+            case "AtlassianProvisioningRequestedV1" -> AtlassianProvisioningRequestedV1.newBuilder()
+                    .setEventId((String) data.get("eventId"))
+                    .setEventType((String) data.get("eventType"))
+                    .setEventVersion(((Number) data.get("eventVersion")).intValue())
+                    .setOccurredAt((String) data.get("occurredAt"))
+                    .setCorrelationId((String) data.get("correlationId"))
+                    .setProducer((String) data.get("producer"))
+                    .setUserId((String) data.get("userId"))
+                    .setOnboardingRequestId((String) data.get("onboardingRequestId"))
+                    .setAtlassianIdentityId((String) data.get("atlassianIdentityId"))
+                    .setAtlassianEmail((String) data.get("atlassianEmail"))
+                    .setGroupName((String) data.get("groupName"))
+                    .setProviderTargetId((String) data.get("providerTargetId"))
+                    .build();
+            case "OnboardingCompletedV1" -> OnboardingCompletedV1.newBuilder()
+                    .setEventId((String) data.get("eventId"))
+                    .setEventType((String) data.get("eventType"))
+                    .setEventVersion(((Number) data.get("eventVersion")).intValue())
+                    .setOccurredAt((String) data.get("occurredAt"))
+                    .setCorrelationId((String) data.get("correlationId"))
+                    .setProducer((String) data.get("producer"))
+                    .setUserId((String) data.get("userId"))
+                    .setOnboardingRequestId((String) data.get("onboardingRequestId"))
+                    .setFinalState((String) data.get("finalState"))
+                    .build();
+            case "OnboardingFailedV1" -> OnboardingFailedV1.newBuilder()
+                    .setEventId((String) data.get("eventId"))
+                    .setEventType((String) data.get("eventType"))
+                    .setEventVersion(((Number) data.get("eventVersion")).intValue())
+                    .setOccurredAt((String) data.get("occurredAt"))
+                    .setCorrelationId((String) data.get("correlationId"))
+                    .setProducer((String) data.get("producer"))
+                    .setUserId((String) data.get("userId"))
+                    .setOnboardingRequestId((String) data.get("onboardingRequestId"))
+                    .setFailureStep((String) data.get("failureStep"))
+                    .setFailureCode((String) data.get("failureCode"))
+                    .setFailureMessage((String) data.get("failureMessage"))
+                    .build();
+            default -> throw new IllegalStateException("Unknown event type: " + event.getEventType());
+        };
     }
 }

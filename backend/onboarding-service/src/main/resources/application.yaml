@@ -2,6 +2,12 @@ app:
   kafka:
     partitions: 1
     replicas: 1
+    topics:
+      user-registered: edu.user.registered.v1
+      id-correlation: edu.identity.correlation.v1
+      github-provisioning: edu.provisioning.github.v1
+      atlassian-provisioning: edu.provisioning.atlassian.v1
+      onboarding-lifecycle: edu.onboarding.lifecycle.v1
   open-api:
     description: @project.description@
     title: @project.name@
@@ -25,33 +31,19 @@ spring:
     producer:
       retries: 10
       acks: all
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       properties:
-        delivery:
-          timeout: 60000
-        request:
-          timeout:
-            ms: 30000
-        linger:
-          ms: 0
-        max:
-          inflight:
-            requests:
-              per:
-                connection: 5
-        enable:
-          idempotence: true
+        delivery.timeout: 60000
+        request.timeout.ms: 30000
+        linger.ms: 0
+        max.inflight.requests.per.connection: 5
+        enable.idempotence: true
     bootstrap-servers: ${BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       group-id: onboarding-service-group
-      properties:
-        spring:
-          json:
-            trusted:
-              packages: xyz.catuns.onboarding.service.*
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+    properties:
+      schema-registry-url: ${SCHEMA_REGISTRY_URL:http://localhost:9090}
     template:
       observation-enabled: true
     listener:
