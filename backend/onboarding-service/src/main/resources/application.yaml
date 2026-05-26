@@ -3,6 +3,7 @@ app:
     partitions: 1
     replicas: 1
     topics:
+      user-registered: edu.user.registered.v1
       id-correlation: edu.identity.correlation.v1
       github-provisioning: edu.provisioning.github.v1
       atlassian-provisioning: edu.provisioning.atlassian.v1
