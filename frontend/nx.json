@@ -66,8 +66,14 @@
       "axios": {
         "appProjectName": "web"
       },
-      "action": {},
-      "data-type": {}
+      "action": {
+        "clientPackage": "@client/api-client"
+      },
+      "data-type": {},
+      "client": {
+        "orgName": "client"
+      },
+      "constant": {}
     },
     "@nx/react": {
       "library": {

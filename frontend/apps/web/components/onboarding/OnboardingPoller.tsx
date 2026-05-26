@@ -1,11 +1,16 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { getOnboardingStatus } from '@feature/base/server';
 import type { GetOnboardingStatusResponse } from '@feature/base/server';
 import OnboardingStatusBanner from './OnboardingStatusBanner';
 import StepList from './StepList';
 import CorrelationIdBadge from './CorrelationIdBadge';
+import { logger } from '@feature/logging';
+
+const log = logger.child({ module: 'OnboardingPoller' });
 
 export const TERMINAL_STATES = new Set([
   'COMPLETED',
@@ -33,17 +38,32 @@ interface Props {
 }
 
 export default function OnboardingPoller({ requestId, correlationId }: Props) {
+  const router = useRouter();
+
   const { data, isLoading, isError } = useQuery<GetOnboardingStatusResponse>({
     queryKey: ['onboarding-status', requestId],
     queryFn: async () => {
       const response = await getOnboardingStatus({ requestId: requestId! });
+      if (!response.success) {
+        log.info(response.message + " " + JSON.stringify(response.data))
+      } else {
+        log.info(JSON.stringify(response.data))
+      }
       return response.data;
     },
     enabled: !!requestId,
     refetchInterval: (query) => {
-      return shouldStopPolling(query.state.data?.state) ? false : 3000;
+      return shouldStopPolling(query.state.data?.state) ? false : 30000;
     },
   });
+
+  useEffect(() => {
+    if (data?.state === 'COMPLETED') {
+      router.push('/dashboard');
+    } else if (data?.state === 'FAILED' || data?.state === 'CANCELLED') {
+      router.push('/support');
+    }
+  }, [data?.state, router]);
 
   if (!requestId) {
     return (

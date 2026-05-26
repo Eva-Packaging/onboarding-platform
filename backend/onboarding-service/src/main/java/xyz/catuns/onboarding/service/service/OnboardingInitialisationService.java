@@ -102,7 +102,7 @@ public class OnboardingInitialisationService {
     }
 
     @Transactional(readOnly = true)
-    public Optional<OnboardingLatestResponse> findLatestForUser(UUID userId) {
+    public Optional<OnboardingLatestResponse> findLatestForUser(String userId) {
         return requestRepository.findTopByUserProfileIdOrderByCreatedAtDesc(userId)
             .map(r -> new OnboardingLatestResponse(r.getId(), r.getState().name()));
     }

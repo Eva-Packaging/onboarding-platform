@@ -38,9 +38,9 @@ public class UserProfileController {
         HttpServletRequest request,
         @RequestParam(name = "include", required = false, defaultValue = "") String includeParam
     ) {
-        String githubUserId = principalExtractor.extractGithubUserId(request);
+        String userId = principalExtractor.extractUserId(request);
         Set<String> includes = parseIncludes(includeParam);
-        return ResponseEntity.ok(profileService.getMe(githubUserId, includes));
+        return ResponseEntity.ok(profileService.getMe(userId, includes));
     }
 
     private Set<String> parseIncludes(String includeParam) {

@@ -12,6 +12,7 @@ import xyz.catuns.onboarding.user.repository.ExternalIdentityRepository;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class UserProfileService {
@@ -26,10 +27,11 @@ public class UserProfileService {
     }
 
     @Transactional(readOnly = true)
-    public MeResponse getMe(String githubUserId, Set<String> includes) {
+    public MeResponse getMe(String userId, Set<String> includes) {
+        UUID profileId = UUID.fromString(userId);
         ExternalIdentity githubIdentity = identityRepository
-            .findByProvider_ProviderKeyAndExternalUserId(ProviderKey.GITHUB, githubUserId)
-            .orElseThrow(() -> new NoSuchElementException("No user found for githubUserId: " + githubUserId));
+            .findByProvider_ProviderKeyAndUserProfile_Id(ProviderKey.GITHUB, profileId)
+            .orElseThrow(() -> new NoSuchElementException("No user found for userId: " + userId));
 
         UserProfile profile = githubIdentity.getUserProfile();
 

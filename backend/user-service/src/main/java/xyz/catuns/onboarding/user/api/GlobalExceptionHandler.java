@@ -4,7 +4,9 @@ import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -12,7 +14,9 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import xyz.catuns.onboarding.user.api.dto.ErrorResponse;
 import xyz.catuns.onboarding.user.exception.DuplicateRegistrationException;
+import xyz.catuns.onboarding.user.exception.GitHubAuthenticationException;
 import xyz.catuns.onboarding.user.exception.OnboardingServiceUnavailableException;
+import xyz.catuns.spring.base.exception.controller.ControllerException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -42,10 +46,22 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Constraint violation", details);
     }
 
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    ResponseEntity<ErrorResponse> handleConstraintViolation(DataIntegrityViolationException ex) {
+        Map<String, Object> details = new HashMap<>();
+        log.error("DataIntegrityViolation {}", ex.getMessage());
+        return buildResponse(HttpStatus.CONFLICT, "DATA_INTEGRITY_VIOLATION", "Data integrity violation", details);
+    }
+
     @ExceptionHandler(DuplicateRegistrationException.class)
     ResponseEntity<ErrorResponse> handleDuplicateRegistration(DuplicateRegistrationException ex) {
         return buildResponse(HttpStatus.CONFLICT, "DUPLICATE_REGISTRATION", ex.getMessage(),
                 Map.of("githubUserId", ex.getGithubUserId()));
+    }
+
+    @ExceptionHandler(GitHubAuthenticationException.class)
+    ResponseEntity<ErrorResponse> handleGitHubAuthentication(GitHubAuthenticationException ex) {
+        return buildResponse(HttpStatus.UNAUTHORIZED, "GITHUB_AUTH_FAILED", ex.getMessage(), Map.of());
     }
 
     @ExceptionHandler(OnboardingServiceUnavailableException.class)
@@ -65,6 +81,17 @@ public class GlobalExceptionHandler {
         log.error("Unhandled exception", ex);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
                 "An unexpected error occurred", Map.of());
+    }
+
+    @ExceptionHandler(ControllerException.class)
+    ResponseEntity<ErrorResponse> handleUnexpected(ControllerException ex) {
+        log.error("Controller exception", ex);
+        ProblemDetail body = ex.getBody();
+        Map<String, Object> properties = body.getProperties() != null
+                ? body.getProperties()
+                : Map.of();
+        return buildResponse(HttpStatus.valueOf(body.getStatus()), ex.getTitleMessageCode(),
+                body.getDetail(), properties);
     }
 
     private ResponseEntity<ErrorResponse> buildResponse(HttpStatus status, String code,

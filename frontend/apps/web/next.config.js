@@ -10,6 +10,10 @@ const nextConfig = {
   // Use this to set Nx-specific options
   // See: https://nx.dev/recipes/next/next-config-setup
   nx: {},
+  // pino spawns a thread-stream worker whose __filename must resolve via
+  // Node's native loader, not Next.js's bundler. Without this, the worker
+  // path resolves to C:\ROOT\... instead of the real pnpm store path.
+  serverExternalPackages: ['pino', 'pino-pretty', 'thread-stream'],
 };
 
 const plugins = [

@@ -1,6 +1,4 @@
-package xyz.catuns.onboarding.apigateway.provider;
-
-import java.util.UUID;
+package xyz.catuns.onboarding.common.security.provider;
 
 public record Payload(
         String userId,

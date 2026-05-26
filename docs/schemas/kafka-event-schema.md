@@ -56,16 +56,16 @@ Each event should carry a common metadata envelope so consumers can trace, dedup
 
 Common fields for every event:
 
-| Field | Avro Type | Notes |
-|---|---|---|
-| `eventId` | `string` | Unique event UUID |
-| `eventType` | `string` | Logical event name |
-| `eventVersion` | `int` | Payload version, usually `1` initially |
-| `occurredAt` | `string` | ISO-8601 timestamp |
-| `correlationId` | `string` | Distributed trace ID |
-| `producer` | `string` | Producing service name |
-| `userId` | `string` | Internal user UUID |
-| `onboardingRequestId` | `null` or `string` | Nullable when event is pre-onboarding |
+| Field                 | Avro Type          | Notes                                  |
+|-----------------------|--------------------|----------------------------------------|
+| `eventId`             | `string`           | Unique event UUID                      |
+| `eventType`           | `string`           | Logical event name                     |
+| `eventVersion`        | `int`              | Payload version, usually `1` initially |
+| `occurredAt`          | `string`           | ISO-8601 timestamp                     |
+| `correlationId`       | `string`           | Distributed trace ID                   |
+| `producer`            | `string`           | Producing service name                 |
+| `userId`              | `string`           | Internal user UUID                     |
+| `onboardingRequestId` | `null` or `string` | Nullable when event is pre-onboarding  |
 
 Recommended metadata rules:
 - Use UUID strings for IDs to keep cross-language interoperability simple.
@@ -74,13 +74,13 @@ Recommended metadata rules:
 
 ## Topics and event families
 
-| Topic | Purpose | Example event types |
-|---|---|---|
-| `edu.user.registered.v1` | Initial registration and user bootstrap | `UserRegisteredV1` |
-| `edu.identity.correlation.v1` | GitHub-to-Atlassian matching lifecycle | `IdentityCorrelationRequestedV1`, `IdentityCorrelationCompletedV1`, `IdentityCorrelationFailedV1` |
-| `edu.provisioning.github.v1` | GitHub org/team provisioning lifecycle | `GithubProvisioningRequestedV1`, `GithubProvisioningCompletedV1` |
-| `edu.provisioning.atlassian.v1` | Atlassian/Jira group provisioning lifecycle | `AtlassianProvisioningRequestedV1`, `AtlassianProvisioningCompletedV1` |
-| `edu.onboarding.lifecycle.v1` | Final onboarding outcomes | `OnboardingCompletedV1`, `OnboardingFailedV1` |
+| Topic                           | Purpose                                     | Example event types                                                                               |
+|---------------------------------|---------------------------------------------|---------------------------------------------------------------------------------------------------|
+| `edu.user.registered.v1`        | Initial registration and user bootstrap     | `UserRegisteredV1`                                                                                |
+| `edu.identity.correlation.v1`   | GitHub-to-Atlassian matching lifecycle      | `IdentityCorrelationRequestedV1`, `IdentityCorrelationCompletedV1`, `IdentityCorrelationFailedV1` |
+| `edu.provisioning.github.v1`    | GitHub org/team provisioning lifecycle      | `GithubProvisioningRequestedV1`, `GithubProvisioningCompletedV1`                                  |
+| `edu.provisioning.atlassian.v1` | Atlassian/Jira group provisioning lifecycle | `AtlassianProvisioningRequestedV1`, `AtlassianProvisioningCompletedV1`                            |
+| `edu.onboarding.lifecycle.v1`   | Final onboarding outcomes                   | `OnboardingCompletedV1`, `OnboardingFailedV1`                                                     |
 
 This split matches the asynchronous boundaries in the system design: GitHub membership may remain pending until invitation acceptance, Atlassian provisioning may progress independently, and identity correlation is its own business step because Jira-linked developer attribution depends on that match.
 

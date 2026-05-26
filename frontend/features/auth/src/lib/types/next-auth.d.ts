@@ -12,6 +12,7 @@ declare module 'next-auth' {
     onboardingRequestId?: string;
     correlationId?: string;
     registrationError?: boolean;
+    backendToken?: string;
   }
 }
 
@@ -23,6 +24,8 @@ declare module 'next-auth/jwt' {
     onboardingRequestId?: string;
     correlationId?: string;
     registrationError?: boolean;
+    backendToken?: string;
+    backendTokenExpiresAt?: number;
   }
 }
 

@@ -11,6 +11,7 @@ import xyz.catuns.onboarding.user.exception.DuplicateRegistrationException;
 import xyz.catuns.onboarding.user.repository.*;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -45,12 +46,16 @@ public class UserRegistrationService {
 
     @Transactional
     public RegistrationResult register(RegistrationRequest request) {
-        identityRepo.findByProvider_ProviderKeyAndExternalUserId(ProviderKey.GITHUB, request.getGithubUserId())
-                .ifPresent(existing -> {
-                    if (existing.getUserProfile().getStatus() == UserStatus.ACTIVE) {
-                        throw new DuplicateRegistrationException(request.getGithubUserId());
-                    }
-                });
+        Optional<ExternalIdentity> existingIdentity = identityRepo
+                .findByProvider_ProviderKeyAndExternalUserId(ProviderKey.GITHUB, request.getGithubUserId());
+        if (existingIdentity.isPresent()) {
+            UserProfile existing = existingIdentity.get().getUserProfile();
+            if (existing.getStatus() == UserStatus.ACTIVE) {
+                throw new DuplicateRegistrationException(request.getGithubUserId());
+            }
+            // PENDING_ONBOARDING: idempotent re-registration — return existing user
+            return new RegistrationResult(existing.getId(), UUID.randomUUID(), true);
+        }
 
         ExternalProvider githubProvider = providerRepo.findByProviderKey(ProviderKey.GITHUB)
                 .orElseThrow(() -> new IllegalStateException("GITHUB ExternalProvider not found — check seed data"));

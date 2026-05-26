@@ -29,7 +29,7 @@ class OnboardingRequestRepositoryTest {
 
     @Test
     void save_persistsAndAssignsGeneratedId() {
-        OnboardingRequest saved = repository.save(buildRequest(UUID.randomUUID()));
+        OnboardingRequest saved = repository.save(buildRequest(UUID.randomUUID().toString()));
 
         assertThat(saved.getId()).isNotNull();
         assertThat(saved.getState()).isEqualTo(OnboardingRequestState.REQUESTED);
@@ -37,7 +37,7 @@ class OnboardingRequestRepositoryTest {
 
     @Test
     void save_populatesCreatedAtAndUpdatedAt() {
-        OnboardingRequest saved = repository.save(buildRequest(UUID.randomUUID()));
+        OnboardingRequest saved = repository.save(buildRequest(UUID.randomUUID().toString()));
 
         assertThat(saved.getCreatedAt()).isNotNull();
         assertThat(saved.getUpdatedAt()).isNotNull();
@@ -46,14 +46,14 @@ class OnboardingRequestRepositoryTest {
 
     @Test
     void save_populatesStartedAtFromPrePersist() {
-        OnboardingRequest saved = repository.save(buildRequest(UUID.randomUUID()));
+        OnboardingRequest saved = repository.save(buildRequest(UUID.randomUUID().toString()));
 
         assertThat(saved.getStartedAt()).isNotNull();
     }
 
     @Test
     void findById_returnsPersistedRequest() {
-        OnboardingRequest saved = repository.save(buildRequest(UUID.randomUUID()));
+        OnboardingRequest saved = repository.save(buildRequest(UUID.randomUUID().toString()));
 
         Optional<OnboardingRequest> found = repository.findById(saved.getId());
 
@@ -64,10 +64,10 @@ class OnboardingRequestRepositoryTest {
 
     @Test
     void findByUserProfileId_returnsRequestsForUser() {
-        UUID userProfileId = UUID.randomUUID();
+        String userProfileId = UUID.randomUUID().toString();
         repository.save(buildRequest(userProfileId));
         repository.save(buildRequest(userProfileId));
-        repository.save(buildRequest(UUID.randomUUID()));
+        repository.save(buildRequest(UUID.randomUUID().toString()));
 
         List<OnboardingRequest> found = repository.findByUserProfileId(userProfileId);
 
@@ -77,12 +77,12 @@ class OnboardingRequestRepositoryTest {
 
     @Test
     void findByUserProfileId_returnsEmptyForUnknownUser() {
-        List<OnboardingRequest> found = repository.findByUserProfileId(UUID.randomUUID());
+        List<OnboardingRequest> found = repository.findByUserProfileId(UUID.randomUUID().toString());
 
         assertThat(found).isEmpty();
     }
 
-    private OnboardingRequest buildRequest(UUID userProfileId) {
+    private OnboardingRequest buildRequest(String userProfileId) {
         OnboardingRequest request = new OnboardingRequest();
         request.setUserProfileId(userProfileId);
         request.setState(OnboardingRequestState.REQUESTED);

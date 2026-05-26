@@ -112,7 +112,7 @@ class OnboardingStepRepositoryTest {
 
     private OnboardingRequest buildRequest() {
         OnboardingRequest r = new OnboardingRequest();
-        r.setUserProfileId(UUID.randomUUID());
+        r.setUserProfileId(UUID.randomUUID().toString());
         r.setState(OnboardingRequestState.REQUESTED);
         r.setSource(OnboardingSource.SELF_REGISTRATION);
         r.setCorrelationId(UUID.randomUUID());

@@ -1,7 +1,13 @@
+import { pinoOptions } from '@feature/logging/config';
+
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
-    const { default: pinoHttp } = await import('pino-http');
-    const { default: logger } = await import('./lib/logger/server');
+    const [{ default: pinoHttp }, { default: pino }] = await Promise.all([
+      import('pino-http'),
+      import('pino'),
+    ]);
+
+    const logger = pino(pinoOptions);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).__httpLogger = pinoHttp({

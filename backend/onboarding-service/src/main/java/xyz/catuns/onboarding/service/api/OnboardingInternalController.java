@@ -8,10 +8,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import xyz.catuns.onboarding.service.api.dto.OnboardingInitRequest;
-import xyz.catuns.onboarding.service.api.dto.OnboardingLatestResponse;
-
-import java.util.UUID;
 import xyz.catuns.onboarding.service.api.dto.OnboardingInitResponse;
+import xyz.catuns.onboarding.service.api.dto.OnboardingLatestResponse;
 import xyz.catuns.onboarding.service.service.OnboardingInitialisationService;
 
 @RestController
@@ -38,7 +36,7 @@ public class OnboardingInternalController {
     @GetMapping("/onboarding-requests/latest")
     @Operation(summary = "Get Latest Onboarding", description = "Returns the most recent onboarding request for a user")
     @ApiResponse(responseCode = "200", description = "HTTP Status OK")
-    ResponseEntity<OnboardingLatestResponse> getLatestOnboarding(@RequestParam UUID userId) {
+    ResponseEntity<OnboardingLatestResponse> getLatestOnboarding(@RequestParam String userId) {
         return initialisationService.findLatestForUser(userId)
             .map(ResponseEntity::ok)
             .orElse(ResponseEntity.notFound().build());

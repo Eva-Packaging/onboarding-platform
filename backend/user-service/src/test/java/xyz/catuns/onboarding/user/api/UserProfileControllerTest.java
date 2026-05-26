@@ -37,12 +37,12 @@ class UserProfileControllerTest {
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
 
-        when(principalExtractor.extractGithubUserId(any())).thenReturn(GITHUB_USER_ID);
+        when(principalExtractor.extractUserId(any())).thenReturn(USER_ID.toString());
     }
 
     @Test
     void getMe_baseProfile_returns200WithCoreFields() throws Exception {
-        when(profileService.getMe(eq(GITHUB_USER_ID), any()))
+        when(profileService.getMe(eq(USER_ID.toString()), any()))
             .thenReturn(baseProfile());
 
         mockMvc.perform(get("/api/v1/me").header("Authorization", "Bearer dummy-token"))
@@ -66,7 +66,7 @@ class UserProfileControllerTest {
             .github(github).atlassian(atlassian)
             .build();
 
-        when(profileService.getMe(eq(GITHUB_USER_ID), argThat(s -> s.contains("identities"))))
+        when(profileService.getMe(eq(USER_ID.toString()), argThat(s -> s.contains("identities"))))
             .thenReturn(response);
 
         mockMvc.perform(get("/api/v1/me?include=identities").header("Authorization", "Bearer dummy-token"))
@@ -85,7 +85,7 @@ class UserProfileControllerTest {
             .onboarding(new OnboardingSummary(requestId, "IN_PROGRESS"))
             .build();
 
-        when(profileService.getMe(eq(GITHUB_USER_ID), argThat(s -> s.contains("onboarding"))))
+        when(profileService.getMe(eq(USER_ID.toString()), argThat(s -> s.contains("onboarding"))))
             .thenReturn(response);
 
         mockMvc.perform(get("/api/v1/me?include=onboarding").header("Authorization", "Bearer dummy-token"))
@@ -96,7 +96,7 @@ class UserProfileControllerTest {
 
     @Test
     void getMe_unknownUser_returns404() throws Exception {
-        when(profileService.getMe(eq(GITHUB_USER_ID), any()))
+        when(profileService.getMe(eq(USER_ID.toString()), any()))
             .thenThrow(new NoSuchElementException("No user found for githubUserId: " + GITHUB_USER_ID));
 
         mockMvc.perform(get("/api/v1/me").header("Authorization", "Bearer dummy-token"))
@@ -115,7 +115,7 @@ class UserProfileControllerTest {
             .onboarding(new OnboardingSummary(requestId, "IN_PROGRESS"))
             .build();
 
-        when(profileService.getMe(eq(GITHUB_USER_ID), argThat(s -> s.contains("identities") && s.contains("onboarding"))))
+        when(profileService.getMe(eq(USER_ID.toString()), argThat(s -> s.contains("identities") && s.contains("onboarding"))))
             .thenReturn(response);
 
         mockMvc.perform(get("/api/v1/me?include=identities,onboarding").header("Authorization", "Bearer dummy-token"))

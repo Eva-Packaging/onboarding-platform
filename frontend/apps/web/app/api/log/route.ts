@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import logger from '../../../lib/logger/server';
+import { logger } from '@feature/logging/server';
 
 interface ClientLogPayload {
   level: string;

@@ -1,4 +1,4 @@
-package xyz.catuns.onboarding.apigateway.provider;
+package xyz.catuns.onboarding.common.security.provider;
 
 import xyz.catuns.spring.jwt.core.properties.JwtMetadata;
 import xyz.catuns.spring.jwt.core.provider.SimpleTokenProvider;
