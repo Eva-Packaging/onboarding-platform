@@ -6,11 +6,33 @@ services:
       - "8080:8080"
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      CONSUL_HOST: 0.0.0.0
     depends_on:
       - consul
     networks:
       - microservice
       - observability
+    restart: unless-stopped
+
+  users:
+    image: user-service:0.0.1-SNAPSHOT
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+      JWT_SECRET: ${JWT_SECRET}
+      SCHEMA_REGISTRY_URL: ${SCHEMA_REGISTRY_URL}
+      ZIPKIN_ENDPOINT: ${ZIPKIN_ENDPOINT}
+      DATABASE_USER: ${DATABASE_USER:-default}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-password}
+    depends_on:
+      - consul
+      - postgres
+      - kafka
+    networks:
+      - microservice
+      - observability
+      - kafka-net
+      - postgres
     restart: unless-stopped
 
   kafka:
@@ -143,6 +165,30 @@ services:
       - observability
     restart: unless-stopped
 
+  loki:
+    image: grafana/loki:3.5.0
+    hostname: loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - observability
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:3.5.0
+    hostname: promtail
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./infra/promtail/promtail.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - observability
+    depends_on:
+      - loki
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:12.0.1
     hostname: grafana
@@ -154,11 +200,12 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana-data:/var/lib/grafana
-      - .infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
     networks:
       - observability
     depends_on:
       - prometheus
+      - loki
     restart: unless-stopped
 
 networks:
