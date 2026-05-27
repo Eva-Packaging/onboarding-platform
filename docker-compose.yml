@@ -1,5 +1,18 @@
 name: onboarding
 services:
+  api-gateway:
+    image: api-gateway:0.0.1-SNAPSHOT
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      - consul
+    networks:
+      - microservice
+      - observability
+    restart: unless-stopped
+
   kafka:
     image: confluentinc/cp-kafka:8.2.0
     hostname: kafka-1
@@ -24,7 +37,7 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
     volumes:
       - kafka-1-data:/var/lib/kafka/data
-      - ./kafka/server.properties:/opt/kafka/config/server.properties
+      - ./infra/kafka/server.properties:/opt/kafka/config/server.properties
     networks:
       - kafka-net
     restart: unless-stopped
@@ -72,21 +85,6 @@ services:
       - microservice
     restart: unless-stopped
 
-#  api-gateway:
-#    image: api-gateway:dev
-#    build:
-#      context: ../../backend/api-gateway
-#      dockerfile: Dockerfile
-#    ports:
-#      - "8080:8080"
-#    environment:
-#      SPRING_PROFILES_ACTIVE: docker
-#    depends_on:
-#      - consul
-#    networks:
-#      - microservice
-#    restart: unless-stopped
-
   postgres:
     image: postgres:17-alpine3.19
     environment:
@@ -96,7 +94,7 @@ services:
       PGDATA: /data/postgres
     volumes:
       - postgres:/data/postgres
-      - ./postgres:/docker-entrypoint-initdb.d
+      - ./infra/postgres:/docker-entrypoint-initdb.d
     ports:
       - '${DATABASE_PORT:-5432}:5432'
     networks:
@@ -132,7 +130,7 @@ services:
     ports:
       - "9093:9090"
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -156,7 +154,7 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - .infra/grafana/provisioning:/etc/grafana/provisioning:ro
     networks:
       - observability
     depends_on:
