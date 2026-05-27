@@ -13,7 +13,7 @@ app:
       onboarding: onboarding-service
       github-url: https://api.github.com
   outbox:
-    poll-interval-ms: 60000 # 1 minute should be good
+    poll-interval-ms: 10000 # 10S should be good
 spring:
   application:
     name: user-service

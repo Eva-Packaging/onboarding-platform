@@ -1,0 +1,28 @@
+spring:
+  cloud:
+    consul:
+      enabled: false
+      discovery:
+        enabled: false
+    gateway:
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: false
+app:
+  open-api:
+    title: "API Gateway"
+    version: "0.0.1-SNAPSHOT"
+    description: "API Gateway test context"
+jwt:
+  secret: "this-secret-should-be-sufficient-for-256-bytes"
+  issuer: api-gateway
+  public-paths:
+    - /swagger-ui/**
+    - /v3/api-docs/**
+    - /actuator/**
+    - /error/**
+    - /api/v1/docs/**
+    - /api/v1/users/registrations
+    - /api/v1/users/auth/token

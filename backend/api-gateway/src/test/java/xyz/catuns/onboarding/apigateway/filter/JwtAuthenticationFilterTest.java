@@ -16,7 +16,7 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import xyz.catuns.onboarding.apigateway.config.properties.JwtProperties;
-import xyz.catuns.onboarding.apigateway.provider.Payload;
+import xyz.catuns.onboarding.common.security.provider.Payload;
 import xyz.catuns.spring.jwt.core.provider.TokenProvider;
 
 import java.util.List;
