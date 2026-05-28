@@ -165,7 +165,7 @@ class OnboardingRetryServiceTest {
     private OnboardingRequest buildRequest(OnboardingRequestState state) {
         OnboardingRequest request = new OnboardingRequest();
         request.setId(REQUEST_ID);
-        request.setUserProfileId(USER_ID);
+        request.setUserProfileId(USER_ID.toString());
         request.setState(state);
         request.setCorrelationId(CORRELATION_ID);
         request.setStartedAt(Instant.now());

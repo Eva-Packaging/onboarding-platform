@@ -49,14 +49,14 @@ class OnboardingControllerTest {
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
 
-        when(principalExtractor.extractUserId(any())).thenReturn(CALLER_ID);
+        when(principalExtractor.extractUserId(any())).thenReturn(CALLER_ID.toString());
     }
 
     // --- GET /{requestId} ---
 
     @Test
     void getStatus_ownerRequest_returns200WithBody() throws Exception {
-        when(statusService.findById(eq(REQUEST_ID), eq(CALLER_ID))).thenReturn(buildStatusResponse());
+        when(statusService.findById(eq(REQUEST_ID), eq(CALLER_ID.toString()))).thenReturn(buildStatusResponse());
 
         mockMvc.perform(get("/api/v1/onboarding/{requestId}", REQUEST_ID)
                 .header("Authorization", "Bearer dummy-token"))
@@ -70,7 +70,7 @@ class OnboardingControllerTest {
 
     @Test
     void getStatus_notFound_returns404WithErrorEnvelope() throws Exception {
-        when(statusService.findById(eq(REQUEST_ID), eq(CALLER_ID)))
+        when(statusService.findById(eq(REQUEST_ID), eq(CALLER_ID.toString())))
             .thenThrow(new ResourceNotFoundException("OnboardingRequest", REQUEST_ID));
 
         mockMvc.perform(get("/api/v1/onboarding/{requestId}", REQUEST_ID)
@@ -81,7 +81,7 @@ class OnboardingControllerTest {
 
     @Test
     void getStatus_nonOwner_returns403WithErrorEnvelope() throws Exception {
-        when(statusService.findById(eq(REQUEST_ID), eq(CALLER_ID)))
+        when(statusService.findById(eq(REQUEST_ID), eq(CALLER_ID.toString())))
             .thenThrow(new OnboardingAccessDeniedException(REQUEST_ID));
 
         mockMvc.perform(get("/api/v1/onboarding/{requestId}", REQUEST_ID)
@@ -93,9 +93,9 @@ class OnboardingControllerTest {
     @Test
     void getStatus_emptySteps_returnsEmptyArray() throws Exception {
         OnboardingStatusResponse response = new OnboardingStatusResponse(
-            REQUEST_ID, CALLER_ID, "COMPLETED", CORRELATION_ID, Instant.now(), List.of()
+            REQUEST_ID, CALLER_ID.toString(), "COMPLETED", CORRELATION_ID, Instant.now(), List.of()
         );
-        when(statusService.findById(eq(REQUEST_ID), eq(CALLER_ID))).thenReturn(response);
+        when(statusService.findById(eq(REQUEST_ID), eq(CALLER_ID.toString()))).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/onboarding/{requestId}", REQUEST_ID)
                 .header("Authorization", "Bearer dummy-token"))
@@ -158,7 +158,7 @@ class OnboardingControllerTest {
 
     private OnboardingStatusResponse buildStatusResponse() {
         return new OnboardingStatusResponse(
-            REQUEST_ID, CALLER_ID, "IN_PROGRESS", CORRELATION_ID, Instant.now(), List.of()
+            REQUEST_ID, CALLER_ID.toString(), "IN_PROGRESS", CORRELATION_ID, Instant.now(), List.of()
         );
     }
 }

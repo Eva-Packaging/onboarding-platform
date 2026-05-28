@@ -9,6 +9,7 @@ import xyz.catuns.onboarding.service.TestcontainersConfiguration;
 import xyz.catuns.onboarding.service.api.dto.OnboardingInitRequest;
 import xyz.catuns.onboarding.service.api.dto.OnboardingInitResponse;
 import xyz.catuns.onboarding.service.api.dto.StepSummaryDto;
+import xyz.catuns.onboarding.service.domain.OnboardingRequest;
 import xyz.catuns.onboarding.service.domain.OnboardingRequestState;
 import xyz.catuns.onboarding.service.domain.OnboardingStepState;
 import xyz.catuns.onboarding.service.domain.StepType;
@@ -78,18 +79,18 @@ class OnboardingInitialisationServiceTest {
     @Test
     void initialise_correlationIdIsPreservedOnRequest() {
         UUID correlationId = UUID.randomUUID();
-        OnboardingInitRequest request = new OnboardingInitRequest(UUID.randomUUID(), correlationId, List.of("STUDENT"));
+        OnboardingInitRequest request = new OnboardingInitRequest(UUID.randomUUID().toString(), correlationId, List.of("STUDENT"));
 
         OnboardingInitResponse response = initialisationService.initialise(request);
 
         assertThat(requestRepository.findById(response.requestId()))
             .isPresent()
             .get()
-            .extracting(r -> r.getCorrelationId())
+            .extracting(OnboardingRequest::getCorrelationId)
             .isEqualTo(correlationId);
     }
 
     private OnboardingInitRequest buildRequest() {
-        return new OnboardingInitRequest(UUID.randomUUID(), UUID.randomUUID(), List.of("STUDENT"));
+        return new OnboardingInitRequest(UUID.randomUUID().toString(), UUID.randomUUID(), List.of("STUDENT"));
     }
 }

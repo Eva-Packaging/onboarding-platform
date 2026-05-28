@@ -18,12 +18,23 @@ services:
     image: user-service:0.0.1-SNAPSHOT
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
       JWT_SECRET: ${JWT_SECRET}
-      SCHEMA_REGISTRY_URL: ${SCHEMA_REGISTRY_URL}
-      ZIPKIN_ENDPOINT: ${ZIPKIN_ENDPOINT}
-      DATABASE_USER: ${DATABASE_USER:-default}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-password}
+    depends_on:
+      - consul
+      - postgres
+      - kafka
+    networks:
+      - microservice
+      - observability
+      - kafka-net
+      - postgres
+    restart: unless-stopped
+
+  onboarding:
+    image: onboarding-service:0.0.1-SNAPSHOT
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JWT_SECRET: ${JWT_SECRET}
     depends_on:
       - consul
       - postgres

@@ -6,7 +6,9 @@ spring:
   datasource:
     url: jdbc:postgresql://${DATABASE_HOST:postgres}:${DATABASE_PORT:5432}/${DATABASE_NAME:onboarding_service}
   kafka:
-    bootstrap-servers: ${BOOTSTRAP_SERVERS:kafka-1:9092}
+    bootstrap-servers: ${BOOTSTRAP_SERVERS:kafka-1:9090}
+    properties:
+      schema-registry-url: ${SCHEMA_REGISTRY_URL:http://schema-registry:8081}
   jpa:
     hibernate:
       ddl-auto: none
@@ -23,3 +25,7 @@ logging:
       catuns:
         onboarding:
           service: debug
+management:
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://zipkin:9411/api/v2/spans}
