@@ -19,6 +19,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       JWT_SECRET: ${JWT_SECRET}
+      JWT_SECURITY_PUBLIC_PATHS: "/**"
     depends_on:
       - consul
       - postgres
@@ -35,6 +36,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       JWT_SECRET: ${JWT_SECRET}
+      JWT_SECURITY_PUBLIC_PATHS: "/**"
     depends_on:
       - consul
       - postgres
@@ -170,8 +172,6 @@ services:
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=7d
       - --web.enable-lifecycle
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     networks:
       - observability
     restart: unless-stopped

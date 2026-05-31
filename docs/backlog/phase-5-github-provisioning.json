@@ -1,0 +1,294 @@
+{
+  "summary": "Phase 5: GitHub Provisioning",
+  "description": "Implement real GitHub team membership provisioning in provisioning-service, replacing the Phase 4 stub in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/service/ProvisioningEventService.java>. The stub currently hardcodes membershipState ACTIVE and ResultState SUCCESS without calling GitHub. This epic wires a RestClient-based GitHub adapter, handles the ACTIVE/PENDING/FAILED membership lifecycle, enriches the provisioning_audit_log with real response data, publishes GithubProvisioningCompletedV1 via the outbox, and updates onboarding step state in onboarding-service. Phase 5 exit criteria: users can be provisioned into configured GitHub teams, pending invitation acceptance is reflected in onboarding step state PENDING_EXTERNAL_ACCEPTANCE, and provider failures are visible in audit logs and the provider health endpoint.",
+  "labels": ["github", "provisioning", "phase-5", "backend", "kafka", "outbox"],
+  "priority": "High",
+  "userType": "new user",
+  "functionality": "be automatically provisioned into the correct GitHub org teams as part of the onboarding workflow",
+  "benefit": "so that repository and team access is granted asynchronously without manual administrator intervention",
+  "stories": [
+    {
+      "summary": "Configure GitHub REST API client with token authentication",
+      "description": "Configure a Spring RestClient bean in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/config/AppConfig.java> for GitHub API calls using Bearer token authentication. GitHub is an external provider so RestClient is appropriate here; OpenFeign is reserved for inter-service calls. Add a GithubClientProperties @ConfigurationProperties class in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/config/properties/GithubClientProperties.java> binding github.api.base-url, github.api.token, and github.api.org. Add these properties to <backend/provisioning-service/src/main/resources/application.yml> with placeholder values compatible with GCP Secret Manager environment variable injection.",
+      "labels": ["github", "http-client", "config", "phase-5", "provisioning-service"],
+      "priority": "High",
+      "storyPoints": 3,
+      "acceptanceCriteria": [
+        {
+          "scenario": "GitHub RestClient bean is available in application context",
+          "given": "provisioning-service starts with github.api.base-url, github.api.token, and github.api.org configured",
+          "when": "the application context loads",
+          "then": "a RestClient bean named githubRestClient is available and configured with Authorization: Bearer {token} as a default header"
+        },
+        {
+          "scenario": "Missing token causes startup failure",
+          "given": "github.api.token is absent or blank in the environment",
+          "when": "the application starts",
+          "then": "startup fails with a clear ConfigurationPropertiesBindException identifying the missing property"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add GithubClientProperties @ConfigurationProperties class",
+          "description": "Create <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/config/properties/GithubClientProperties.java> binding prefix github.api with fields baseUrl, token, and org. Annotate with @ConfigurationProperties and @Validated with @NotBlank on all three fields."
+        },
+        {
+          "summary": "Register githubRestClient bean in AppConfig",
+          "description": "Add a RestClient @Bean to <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/config/AppConfig.java>. Configure it with GithubClientProperties.baseUrl as the base URL and a default request header Authorization: Bearer {token}. Accept and return application/json."
+        },
+        {
+          "summary": "Add GitHub properties to application.yml and .env.example",
+          "description": "Add github.api.base-url: https://api.github.com, github.api.token: ${GITHUB_API_TOKEN}, and github.api.org: ${GITHUB_ORG} to <backend/provisioning-service/src/main/resources/application.yml>. Add GITHUB_API_TOKEN and GITHUB_ORG with empty placeholder values to <infra/docker/.env.example>."
+        }
+      ]
+    },
+    {
+      "summary": "Implement GitHub team membership adapter",
+      "description": "Create GithubProvisioningAdapter in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/github/GithubProvisioningAdapter.java>. Call PUT /orgs/{org}/teams/{team_slug}/memberships/{username} using the configured githubRestClient. Parse the response body field \"state\": map \"active\" to membershipState ACTIVE and \"pending\" to membershipState PENDING. On HTTP 404 return membershipState FAILED with errorCode USER_OR_TEAM_NOT_FOUND. On HTTP 403 with a Retry-After header, throw a GithubRateLimitException so the Spring Kafka error handler can reprocess after the delay. On any other non-2xx status return membershipState FAILED with the HTTP status code as the errorCode. Return a GithubMembershipResult value object containing membershipState, success flag, errorCode, and errorMessage.",
+      "labels": ["github", "adapter", "phase-5", "provisioning-service"],
+      "priority": "High",
+      "storyPoints": 8,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Active membership returns ACTIVE state",
+          "given": "GitHub responds with 200 and body {\"state\": \"active\"} to the membership PUT",
+          "when": "GithubProvisioningAdapter.addTeamMember is called",
+          "then": "GithubMembershipResult has membershipState ACTIVE, success true, and null errorCode"
+        },
+        {
+          "scenario": "Pending invitation returns PENDING state",
+          "given": "GitHub responds with 200 and body {\"state\": \"pending\"} to the membership PUT",
+          "when": "GithubProvisioningAdapter.addTeamMember is called",
+          "then": "GithubMembershipResult has membershipState PENDING, success true, and null errorCode"
+        },
+        {
+          "scenario": "Not found returns FAILED state with error code",
+          "given": "GitHub responds with 404 to the membership PUT",
+          "when": "GithubProvisioningAdapter.addTeamMember is called",
+          "then": "GithubMembershipResult has membershipState FAILED, success false, and errorCode USER_OR_TEAM_NOT_FOUND"
+        },
+        {
+          "scenario": "Rate limit throws retryable exception",
+          "given": "GitHub responds with 403 and a Retry-After header",
+          "when": "GithubProvisioningAdapter.addTeamMember is called",
+          "then": "a GithubRateLimitException is thrown containing the retry-after value so the Kafka listener can reprocess the message"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create GithubMembershipResult value object",
+          "description": "Create <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/github/GithubMembershipResult.java> as a Java record with fields: String membershipState, boolean success, String errorCode, String errorMessage."
+        },
+        {
+          "summary": "Create GithubRateLimitException",
+          "description": "Create <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/github/GithubRateLimitException.java> extending RuntimeException. Include the Retry-After value in seconds as a constructor field so callers can log the delay."
+        },
+        {
+          "summary": "Implement GithubProvisioningAdapter.addTeamMember",
+          "description": "Implement the adapter in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/github/GithubProvisioningAdapter.java>. Use githubRestClient.put().uri(\"/orgs/{org}/teams/{slug}/memberships/{login}\", ...).retrieve() to call GitHub. Inspect the response status and parse the state field. Map outcomes to GithubMembershipResult per the defined rules. Throw GithubRateLimitException when a 403 with Retry-After is detected."
+        },
+        {
+          "summary": "Wire GithubProvisioningAdapter into ProvisioningEventService",
+          "description": "Inject GithubProvisioningAdapter into <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/service/ProvisioningEventService.java>. In handleGithubProvisioningRequested, replace the stub body with a call to adapter.addTeamMember(githubLogin, githubOrg, githubTeamSlug). Pass the returned GithubMembershipResult to the audit log and outbox steps."
+        }
+      ]
+    },
+    {
+      "summary": "Enrich provisioning audit log with real response data and ResultState",
+      "description": "Update ProvisioningEventService.handleGithubProvisioningRequested in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/service/ProvisioningEventService.java> to persist the actual adapter result into provisioning_audit_log. Set responsePayload to a JSON serialization of GithubMembershipResult. Map ResultState: ACTIVE → SUCCESS, PENDING → PENDING, FAILED → FAILED using the existing ResultState enum in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/domain/ResultState.java>. Add PENDING to the enum if absent. Remove the Phase 4 step-id proxy comment and populate onboardingStepId from the event field when the step UUID is propagated by onboarding-service.",
+      "labels": ["audit-log", "phase-5", "provisioning-service", "domain"],
+      "priority": "Medium",
+      "storyPoints": 3,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Audit log records response payload for active membership",
+          "given": "GithubProvisioningAdapter returns membershipState ACTIVE",
+          "when": "handleGithubProvisioningRequested completes",
+          "then": "the provisioning_audit_log row has a non-null responsePayload containing membershipState ACTIVE and resultState SUCCESS"
+        },
+        {
+          "scenario": "Pending membership stored with PENDING result state",
+          "given": "GithubProvisioningAdapter returns membershipState PENDING",
+          "when": "handleGithubProvisioningRequested completes",
+          "then": "the provisioning_audit_log row has resultState PENDING"
+        },
+        {
+          "scenario": "Failed provisioning stored with error detail",
+          "given": "GithubProvisioningAdapter returns membershipState FAILED with errorCode USER_OR_TEAM_NOT_FOUND",
+          "when": "handleGithubProvisioningRequested completes",
+          "then": "the provisioning_audit_log row has resultState FAILED and responsePayload containing errorCode USER_OR_TEAM_NOT_FOUND"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add PENDING to ResultState enum if absent",
+          "description": "Check <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/domain/ResultState.java> for a PENDING value. Add it between SUCCESS and FAILED if absent so pending membership can be persisted in the audit log."
+        },
+        {
+          "summary": "Persist response payload and real ResultState in audit log",
+          "description": "In handleGithubProvisioningRequested in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/service/ProvisioningEventService.java>, add a buildGithubResponsePayload(GithubMembershipResult) helper that serializes the result to JSON. Set auditLog.responsePayload from this helper and auditLog.resultState by mapping GithubMembershipResult.membershipState to the ResultState enum before saving."
+        }
+      ]
+    },
+    {
+      "summary": "Publish GithubProvisioningCompletedV1 via outbox with real membership state",
+      "description": "Replace the raw Map payload builder in ProvisioningEventService with an Avro-typed GithubProvisioningCompletedV1 record sourced from the generated class in backend/common. Build the completion event using the adapter result: set membershipState to ACTIVE, PENDING, or FAILED; set success=true for ACTIVE and PENDING (membership call was successfully initiated), success=false for FAILED; populate errorCode and errorMessage from GithubMembershipResult. Serialize the Avro record to JSON and store as OutboxEvent.payload. Persist the OutboxEvent in the same @Transactional block as the audit log write, preserving the outbox pattern constraint from <docs/design-spec.md>.",
+      "labels": ["kafka", "outbox", "avro", "phase-5", "provisioning-service"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Outbox entry published with ACTIVE membership state",
+          "given": "GithubProvisioningAdapter returns membershipState ACTIVE",
+          "when": "handleGithubProvisioningRequested completes",
+          "then": "an outbox_event row exists with eventType GithubProvisioningCompletedV1, success true, and membershipState ACTIVE in the payload"
+        },
+        {
+          "scenario": "Outbox entry published with PENDING membership state",
+          "given": "GithubProvisioningAdapter returns membershipState PENDING",
+          "when": "handleGithubProvisioningRequested completes",
+          "then": "an outbox_event row exists with membershipState PENDING and success true"
+        },
+        {
+          "scenario": "Outbox entry published with FAILED state and error fields",
+          "given": "GithubProvisioningAdapter returns membershipState FAILED with errorCode USER_OR_TEAM_NOT_FOUND",
+          "when": "handleGithubProvisioningRequested completes",
+          "then": "an outbox_event row exists with membershipState FAILED, success false, and errorCode USER_OR_TEAM_NOT_FOUND in the payload"
+        },
+        {
+          "scenario": "Audit log and outbox write are atomic",
+          "given": "an exception occurs after the audit log is written but before the outbox save",
+          "when": "the transaction rolls back",
+          "then": "neither the audit log row nor the outbox row is persisted"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Build Avro-typed GithubProvisioningCompletedV1 from adapter result",
+          "description": "In <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/service/ProvisioningEventService.java> replace the raw buildGithubCompletionPayload map builder with a new method buildCompletedEvent(GithubProvisioningRequestedV1, GithubMembershipResult) that constructs a GithubProvisioningCompletedV1 Avro record from the generated class in backend/common. Populate all common envelope fields (eventId as new UUID, occurredAt, correlationId, producer=provisioning-service, userId, onboardingRequestId, providerTargetId) plus membershipState, success, errorCode, and errorMessage from the adapter result."
+        },
+        {
+          "summary": "Serialize Avro record to outbox payload string",
+          "description": "Add a helper in ProvisioningEventService that converts a SpecificRecord to a JSON string using the Jackson ObjectMapper with the avro module, consistent with how other services serialize payloads. Set OutboxEvent.payload from this helper and persist in the same transaction as the audit log."
+        }
+      ]
+    },
+    {
+      "summary": "Onboarding-service: update step state on GithubProvisioningCompletedV1",
+      "description": "Add a Kafka consumer in onboarding-service that listens on topic edu.provisioning.github.v1 and processes GithubProvisioningCompletedV1 events. Create GithubProvisioningCompletedEventHandler in <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/onboarding/kafka/GithubProvisioningCompletedEventHandler.java>. Map membershipState: ACTIVE → onboarding_step status SUCCEEDED, PENDING → PENDING_EXTERNAL_ACCEPTANCE, FAILED → FAILED. After persisting the step update, call the existing onboarding request aggregate recalculation: COMPLETED when all steps are terminal and none failed, ACTION_REQUIRED when any step is PENDING_EXTERNAL_ACCEPTANCE, PARTIAL_SUCCESS when at least one step failed and the rest are terminal, IN_PROGRESS otherwise.",
+      "labels": ["onboarding-service", "kafka", "step-state", "phase-5"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Active membership transitions step to SUCCEEDED",
+          "given": "a GithubProvisioningCompletedV1 event with membershipState ACTIVE arrives on edu.provisioning.github.v1",
+          "when": "GithubProvisioningCompletedEventHandler processes the event",
+          "then": "the matching onboarding_step row has status SUCCEEDED and the parent onboarding_request aggregate state is recalculated"
+        },
+        {
+          "scenario": "Pending membership transitions step to PENDING_EXTERNAL_ACCEPTANCE",
+          "given": "a GithubProvisioningCompletedV1 event with membershipState PENDING arrives",
+          "when": "GithubProvisioningCompletedEventHandler processes the event",
+          "then": "the matching onboarding_step row has status PENDING_EXTERNAL_ACCEPTANCE and the parent onboarding_request status becomes ACTION_REQUIRED"
+        },
+        {
+          "scenario": "Failed membership transitions step to FAILED",
+          "given": "a GithubProvisioningCompletedV1 event with success false and membershipState FAILED arrives",
+          "when": "GithubProvisioningCompletedEventHandler processes the event",
+          "then": "the matching onboarding_step row has status FAILED and the parent onboarding_request status is PARTIAL_SUCCESS or FAILED depending on sibling step states"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add GithubProvisioningCompletedEventHandler Kafka listener",
+          "description": "Create <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/onboarding/kafka/GithubProvisioningCompletedEventHandler.java> with @KafkaListener on ${app.kafka.topics.github-provisioning}. Accept a SpecificRecord parameter and filter for GithubProvisioningCompletedV1 instances. Delegate to OnboardingStepService for the state transition."
+        },
+        {
+          "summary": "Implement step state transition in OnboardingStepService",
+          "description": "Add a method to the onboarding-service step service that accepts providerTargetId, onboardingRequestId, and membershipState. Look up the matching onboarding_step by providerTargetId and onboardingRequestId. Map ACTIVE → SUCCEEDED, PENDING → PENDING_EXTERNAL_ACCEPTANCE, FAILED → FAILED and persist the updated step."
+        },
+        {
+          "summary": "Recalculate onboarding_request aggregate state after step update",
+          "description": "After persisting the step state, call the onboarding request aggregate recalculation: all steps terminal and none FAILED → COMPLETED; any PENDING_EXTERNAL_ACCEPTANCE → ACTION_REQUIRED; at least one FAILED with rest terminal → PARTIAL_SUCCESS; any non-terminal step → IN_PROGRESS. Persist the updated onboarding_request status."
+        }
+      ]
+    },
+    {
+      "summary": "Provider health endpoint for GitHub",
+      "description": "Implement GET /api/v1/admin/provider-health in provisioning-service to satisfy the admin tooling requirement in <docs/design-spec.md>. Add ProviderHealthController in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/controller/ProviderHealthController.java>. Add GithubHealthChecker in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/github/GithubHealthChecker.java> that calls GET /rate_limit using the configured githubRestClient. A 200 response indicates status UP; any non-2xx or connection error indicates DOWN. Return a JSON array of provider health objects with fields: provider, status (UP/DOWN), latencyMs, and checkedAt (ISO-8601). Enforce admin-only access on /api/v1/admin/**.",
+      "labels": ["admin", "health", "phase-5", "provisioning-service", "rest"],
+      "priority": "Medium",
+      "storyPoints": 3,
+      "acceptanceCriteria": [
+        {
+          "scenario": "GitHub reachable returns UP status",
+          "given": "an admin-authenticated request is made to GET /api/v1/admin/provider-health and the GitHub API is reachable",
+          "when": "the request is processed",
+          "then": "the response is 200 with a JSON array containing an entry with provider github, status UP, and a non-negative latencyMs"
+        },
+        {
+          "scenario": "GitHub unreachable returns DOWN status without 5xx",
+          "given": "the GitHub API is unreachable or returns a non-2xx status",
+          "when": "GET /api/v1/admin/provider-health is called",
+          "then": "the response is 200 with provider github and status DOWN; the endpoint itself does not return 5xx"
+        },
+        {
+          "scenario": "Non-admin access is rejected with 403",
+          "given": "a request without the admin role calls GET /api/v1/admin/provider-health",
+          "when": "the request is processed",
+          "then": "the response status is 403 Forbidden"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create ProviderHealthResponse DTO",
+          "description": "Create <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/dto/ProviderHealthResponse.java> as a Java record with fields: String provider, String status, long latencyMs, String checkedAt."
+        },
+        {
+          "summary": "Implement GithubHealthChecker",
+          "description": "Create <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/github/GithubHealthChecker.java>. Call GET /rate_limit via githubRestClient. Measure wall-clock latency using System.currentTimeMillis(). Return ProviderHealthResponse with status UP on 2xx, DOWN on any exception or non-2xx. Do not let exceptions propagate out of the checker."
+        },
+        {
+          "summary": "Add ProviderHealthController",
+          "description": "Create <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/controller/ProviderHealthController.java> with @GetMapping(\"/api/v1/admin/provider-health\"). Inject GithubHealthChecker and return List<ProviderHealthResponse>. Confirm the /api/v1/admin/** security rule covers this path."
+        }
+      ]
+    },
+    {
+      "summary": "Unit and integration tests for GitHub provisioning adapter",
+      "description": "Add unit tests and a WireMock integration test for GithubProvisioningAdapter. Unit tests use a mocked RestClient to cover ACTIVE, PENDING, 404, and 403 rate-limit paths without requiring network access. The integration test uses WireMock to stub the GitHub API and TestContainers Kafka to exercise the full consumer-to-outbox flow end to end. Add the WireMock dependency to <backend/provisioning-service/pom.xml> at test scope. Unit tests go in <backend/provisioning-service/src/test/java/xyz/catuns/onboarding/provisioning/github/GithubProvisioningAdapterTest.java> and the integration test in <backend/provisioning-service/src/test/java/xyz/catuns/onboarding/provisioning/integration/GithubProvisioningIntegrationTest.java>.",
+      "labels": ["testing", "wiremock", "phase-5", "provisioning-service", "integration-test"],
+      "priority": "Medium",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Unit tests cover all membership outcome paths",
+          "given": "GithubProvisioningAdapterTest runs with a mocked RestClient",
+          "when": "tests for state active, state pending, HTTP 404, and HTTP 403 with Retry-After are executed",
+          "then": "all four tests pass and each asserts the correct GithubMembershipResult fields"
+        },
+        {
+          "scenario": "Integration test verifies full provisioning flow",
+          "given": "WireMock stubs PUT /orgs/*/teams/*/memberships/* to return 200 with {\"state\": \"active\"} and TestContainers Kafka is running",
+          "when": "a GithubProvisioningRequestedV1 message is published to edu.provisioning.github.v1",
+          "then": "a provisioning_audit_log row and an outbox_event row with membershipState ACTIVE are persisted within the test assertion timeout"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add WireMock dependency to provisioning-service pom.xml",
+          "description": "Add the WireMock Spring Boot starter or com.github.tomakehurst wiremock-jre8 at test scope to <backend/provisioning-service/pom.xml>. Align the version with any other test dependencies already declared."
+        },
+        {
+          "summary": "Write GithubProvisioningAdapterTest unit tests",
+          "description": "Create <backend/provisioning-service/src/test/java/xyz/catuns/onboarding/provisioning/github/GithubProvisioningAdapterTest.java>. Use Mockito to stub RestClient call chains for each scenario: state active, state pending, 404 not found, 403 rate-limit with Retry-After header. Assert membershipState, success, and errorCode fields on the returned GithubMembershipResult for each case."
+        },
+        {
+          "summary": "Write GithubProvisioningIntegrationTest with WireMock and TestContainers",
+          "description": "Create <backend/provisioning-service/src/test/java/xyz/catuns/onboarding/provisioning/integration/GithubProvisioningIntegrationTest.java>. Extend the existing TestcontainersConfiguration to include Kafka and Postgres containers. Start WireMockServer in @BeforeAll and stub PUT /orgs/*/teams/*/memberships/* to return 200 with {\"state\": \"active\"}. Publish a GithubProvisioningRequestedV1 event to the Kafka topic. Poll the provisioning_audit_log and outbox_event tables using Awaitility and assert both rows exist with the expected membershipState."
+        }
+      ]
+    }
+  ]
+}
