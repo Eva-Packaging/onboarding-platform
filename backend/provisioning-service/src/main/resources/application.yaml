@@ -79,6 +79,11 @@ management:
   zipkin:
     tracing:
       endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
+github:
+  api:
+    base-url: https://api.github.com
+    token: ${GITHUB_API_TOKEN}
+    org: ${GITHUB_ORG}
 jwt:
   secret: ${JWT_SECRET}
   issuer: ${spring.application.name}
