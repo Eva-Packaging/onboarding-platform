@@ -15,6 +15,8 @@ import xyz.catuns.onboarding.service.TestcontainersConfiguration;
 import xyz.catuns.onboarding.service.api.dto.OnboardingInitRequest;
 import xyz.catuns.onboarding.service.api.dto.OnboardingInitResponse;
 import xyz.catuns.onboarding.service.domain.GroupMappingRule;
+import xyz.catuns.onboarding.service.domain.OnboardingRequest;
+import xyz.catuns.onboarding.service.domain.OnboardingRequestState;
 import xyz.catuns.onboarding.service.domain.OnboardingStep;
 import xyz.catuns.onboarding.service.domain.OnboardingStepState;
 import xyz.catuns.onboarding.service.domain.OutboxEvent;
@@ -22,6 +24,7 @@ import xyz.catuns.onboarding.service.domain.ProviderTarget;
 import xyz.catuns.onboarding.service.domain.StepType;
 import xyz.catuns.onboarding.service.outbox.OutboxEventPublisher;
 import xyz.catuns.onboarding.service.repository.GroupMappingRuleRepository;
+import xyz.catuns.onboarding.service.repository.OnboardingRequestRepository;
 import xyz.catuns.onboarding.service.repository.OnboardingStepRepository;
 import xyz.catuns.onboarding.service.repository.OutboxEventRepository;
 import xyz.catuns.onboarding.service.repository.ProviderTargetRepository;
@@ -43,6 +46,7 @@ class OnboardingEventServiceTest {
     @Autowired private OnboardingEventService eventService;
     @Autowired private OnboardingInitialisationService initialisationService;
     @Autowired private OnboardingDomainService domainService;
+    @Autowired private OnboardingRequestRepository requestRepository;
     @Autowired private OnboardingStepRepository stepRepository;
     @Autowired private OutboxEventRepository outboxRepo;
     @Autowired private ProviderTargetRepository providerTargetRepository;
@@ -126,6 +130,35 @@ class OnboardingEventServiceTest {
         OnboardingStep step = getStep(requestId, StepType.GITHUB_TEAM_PROVISIONING);
         assertThat(step.getState()).isEqualTo(OnboardingStepState.FAILED);
         assertThat(step.getLastErrorCode()).isEqualTo("GITHUB_API_ERROR");
+    }
+
+    @Test
+    @Transactional
+    void handleGithubProvisioningCompleted_pendingMembership_transitionsGithubStepToPendingExternalAcceptance() {
+        String userId = UUID.randomUUID().toString();
+        UUID requestId = createRequest(userId).requestId();
+        setStepProcessing(requestId, StepType.GITHUB_TEAM_PROVISIONING);
+
+        eventService.handleGithubProvisioningCompleted(githubPendingEvent(userId, requestId.toString()));
+
+        assertStepState(requestId, StepType.GITHUB_TEAM_PROVISIONING, OnboardingStepState.PENDING_EXTERNAL_ACCEPTANCE);
+    }
+
+    @Test
+    @Transactional
+    void handleGithubProvisioningCompleted_pendingMembership_requestBecomesActionRequired() {
+        String userId = UUID.randomUUID().toString();
+        UUID requestId = createRequest(userId).requestId();
+        setStepProcessing(requestId, StepType.IDENTITY_CORRELATION);
+        setStepProcessing(requestId, StepType.GITHUB_TEAM_PROVISIONING);
+        setStepProcessing(requestId, StepType.JIRA_GROUP_PROVISIONING);
+
+        eventService.handleIdentityCorrelationCompleted(identityCompletedEvent(userId, requestId.toString()));
+        eventService.handleAtlassianProvisioningCompleted(atlassianCompletedEvent(userId, requestId.toString(), true));
+        eventService.handleGithubProvisioningCompleted(githubPendingEvent(userId, requestId.toString()));
+
+        OnboardingRequest request = requestRepository.findById(requestId).orElseThrow();
+        assertThat(request.getState()).isEqualTo(OnboardingRequestState.ACTION_REQUIRED);
     }
 
     @Test
@@ -334,6 +367,20 @@ class OnboardingEventServiceTest {
             b.setErrorCode("GITHUB_API_ERROR").setErrorMessage("Simulated failure");
         }
         return b.build();
+    }
+
+    private GithubProvisioningCompletedV1 githubPendingEvent(String userId, String requestId) {
+        return GithubProvisioningCompletedV1.newBuilder()
+                .setEventId(UUID.randomUUID().toString())
+                .setOccurredAt(Instant.now().toString())
+                .setCorrelationId(UUID.randomUUID().toString())
+                .setProducer("provisioning-service")
+                .setUserId(userId)
+                .setOnboardingRequestId(requestId)
+                .setProviderTargetId(UUID.randomUUID().toString())
+                .setMembershipState("PENDING")
+                .setSuccess(true)
+                .build();
     }
 
     private AtlassianProvisioningCompletedV1 atlassianCompletedEvent(String userId, String requestId, boolean success) {

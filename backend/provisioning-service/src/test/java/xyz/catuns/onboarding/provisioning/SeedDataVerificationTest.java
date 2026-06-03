@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.TestPropertySource;
 import xyz.catuns.onboarding.provisioning.domain.GroupMappingRule;
 import xyz.catuns.onboarding.provisioning.domain.ProviderTarget;
 import xyz.catuns.onboarding.provisioning.domain.TargetType;
@@ -17,6 +18,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
+@TestPropertySource(properties = {
+    "github.api.base-url=https://api.github.com",
+    "github.api.token=test-token",
+    "github.api.org=test-org"
+})
 class SeedDataVerificationTest {
 
     private static final UUID STUDENT_ROLE_ID =

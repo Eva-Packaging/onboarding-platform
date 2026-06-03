@@ -9,10 +9,9 @@ import java.util.Set;
 @Component
 public class OnboardingRequestStateResolver {
 
-    private static final Set<OnboardingStepState> NON_TERMINAL = EnumSet.of(
+    private static final Set<OnboardingStepState> ACTIVELY_PROCESSING = EnumSet.of(
         OnboardingStepState.PENDING,
         OnboardingStepState.PROCESSING,
-        OnboardingStepState.PENDING_EXTERNAL_ACCEPTANCE,
         OnboardingStepState.MANUAL_REVIEW
     );
 
@@ -21,8 +20,12 @@ public class OnboardingRequestStateResolver {
             return OnboardingRequestState.IN_PROGRESS;
         }
 
-        if (steps.stream().anyMatch(s -> NON_TERMINAL.contains(s.getState()))) {
+        if (steps.stream().anyMatch(s -> ACTIVELY_PROCESSING.contains(s.getState()))) {
             return OnboardingRequestState.IN_PROGRESS;
+        }
+
+        if (steps.stream().anyMatch(s -> s.getState() == OnboardingStepState.PENDING_EXTERNAL_ACCEPTANCE)) {
+            return OnboardingRequestState.ACTION_REQUIRED;
         }
 
         boolean hasSucceeded = steps.stream().anyMatch(s -> s.getState() == OnboardingStepState.SUCCEEDED);

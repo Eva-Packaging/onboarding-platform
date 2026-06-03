@@ -15,7 +15,13 @@ public final class RequestStateTransitions {
         map.put(OnboardingRequestState.REQUESTED,
             EnumSet.of(OnboardingRequestState.IN_PROGRESS));
         map.put(OnboardingRequestState.IN_PROGRESS,
-            EnumSet.of(OnboardingRequestState.COMPLETED,
+            EnumSet.of(OnboardingRequestState.ACTION_REQUIRED,
+                       OnboardingRequestState.COMPLETED,
+                       OnboardingRequestState.PARTIAL_SUCCESS,
+                       OnboardingRequestState.FAILED));
+        map.put(OnboardingRequestState.ACTION_REQUIRED,
+            EnumSet.of(OnboardingRequestState.IN_PROGRESS,
+                       OnboardingRequestState.COMPLETED,
                        OnboardingRequestState.PARTIAL_SUCCESS,
                        OnboardingRequestState.FAILED));
         map.put(OnboardingRequestState.COMPLETED,    EnumSet.noneOf(OnboardingRequestState.class));
