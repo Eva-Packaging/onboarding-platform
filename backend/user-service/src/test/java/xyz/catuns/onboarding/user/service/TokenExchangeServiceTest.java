@@ -10,11 +10,13 @@ import xyz.catuns.onboarding.user.api.dto.TokenExchangeRequest;
 import xyz.catuns.onboarding.user.api.dto.TokenResponse;
 import xyz.catuns.onboarding.user.client.GitHubApiClient;
 import xyz.catuns.onboarding.user.client.GitHubUserResponse;
+import xyz.catuns.onboarding.user.domain.AppRoleKey;
 import xyz.catuns.onboarding.user.domain.ExternalIdentity;
 import xyz.catuns.onboarding.user.domain.ProviderKey;
 import xyz.catuns.onboarding.user.domain.UserProfile;
 import xyz.catuns.onboarding.user.exception.GitHubAuthenticationException;
 import xyz.catuns.onboarding.user.repository.ExternalIdentityRepository;
+import xyz.catuns.onboarding.user.repository.UserRoleAssignmentRepository;
 import xyz.catuns.spring.jwt.core.model.JwtToken;
 
 import java.time.Instant;
@@ -34,6 +36,7 @@ class TokenExchangeServiceTest {
 
     private GitHubApiClient gitHubApiClient;
     private ExternalIdentityRepository identityRepository;
+    private UserRoleAssignmentRepository roleAssignmentRepository;
     private PayloadTokenProvider tokenProvider;
     private TokenExchangeService service;
 
@@ -41,8 +44,9 @@ class TokenExchangeServiceTest {
     void setUp() {
         gitHubApiClient = mock(GitHubApiClient.class);
         identityRepository = mock(ExternalIdentityRepository.class);
+        roleAssignmentRepository = mock(UserRoleAssignmentRepository.class);
         tokenProvider = mock(PayloadTokenProvider.class);
-        service = new TokenExchangeService(gitHubApiClient, identityRepository, tokenProvider);
+        service = new TokenExchangeService(gitHubApiClient, identityRepository, roleAssignmentRepository, tokenProvider);
     }
 
     @Test
@@ -153,6 +157,8 @@ class TokenExchangeServiceTest {
         when(identity.getUserProfile()).thenReturn(profile);
         when(identityRepository.findByProvider_ProviderKeyAndExternalUserId(any(), any()))
                 .thenReturn(Optional.of(identity));
+        when(roleAssignmentRepository.existsByUserProfile_IdAndAppRole_RoleKey(PROFILE_ID, AppRoleKey.ADMIN))
+                .thenReturn(false);
     }
 
     private TokenExchangeRequest request(String accessToken) {

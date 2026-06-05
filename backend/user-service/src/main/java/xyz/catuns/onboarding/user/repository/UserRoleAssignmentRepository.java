@@ -1,6 +1,7 @@
 package xyz.catuns.onboarding.user.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import xyz.catuns.onboarding.user.domain.AppRoleKey;
 import xyz.catuns.onboarding.user.domain.UserRoleAssignment;
 import xyz.catuns.onboarding.user.domain.UserRoleAssignmentId;
 
@@ -9,4 +10,5 @@ import java.util.UUID;
 
 public interface UserRoleAssignmentRepository extends JpaRepository<UserRoleAssignment, UserRoleAssignmentId> {
     List<UserRoleAssignment> findByUserProfile_Id(UUID userProfileId);
+    boolean existsByUserProfile_IdAndAppRole_RoleKey(UUID userProfileId, AppRoleKey roleKey);
 }

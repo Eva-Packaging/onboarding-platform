@@ -50,7 +50,8 @@ import static org.awaitility.Awaitility.await;
 @TestPropertySource(properties = {
     "github.api.token=test-token",
     "github.api.org=test-org",
-    "spring.kafka.properties.schema-registry-url=mock://test"
+    "spring.kafka.properties.schema-registry-url=mock://test",
+    "jwt.secret=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 })
 class GithubProvisioningIntegrationTest {
 

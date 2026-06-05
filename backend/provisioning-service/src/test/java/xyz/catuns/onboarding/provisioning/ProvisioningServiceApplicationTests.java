@@ -10,7 +10,8 @@ import org.springframework.test.context.TestPropertySource;
 @TestPropertySource(properties = {
     "github.api.base-url=https://api.github.com",
     "github.api.token=test-token",
-    "github.api.org=test-org"
+    "github.api.org=test-org",
+    "jwt.secret=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 })
 class ProvisioningServiceApplicationTests {
 
