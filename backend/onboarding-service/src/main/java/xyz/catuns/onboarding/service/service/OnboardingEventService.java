@@ -179,11 +179,16 @@ public class OnboardingEventService {
         OnboardingStep step = findStep(request.getId(), StepType.GITHUB_TEAM_PROVISIONING);
         if (step == null) return;
 
-        OnboardingStepState target = event.getSuccess() ? OnboardingStepState.SUCCEEDED : OnboardingStepState.FAILED;
-        if (!event.getSuccess()) {
-            step.setLastErrorCode(event.getErrorCode());
-            step.setLastErrorMessage(event.getErrorMessage());
-        }
+        String membershipState = event.getMembershipState() != null ? event.getMembershipState().toString() : "";
+        OnboardingStepState target = switch (membershipState) {
+            case "ACTIVE"   -> OnboardingStepState.SUCCEEDED;
+            case "PENDING"  -> OnboardingStepState.PENDING_EXTERNAL_ACCEPTANCE;
+            default         -> {
+                step.setLastErrorCode(event.getErrorCode() != null ? event.getErrorCode().toString() : null);
+                step.setLastErrorMessage(event.getErrorMessage() != null ? event.getErrorMessage().toString() : null);
+                yield OnboardingStepState.FAILED;
+            }
+        };
         domainService.transitionStep(step, target);
         emitLifecycleEventIfTerminal(request, event.getUserId(),
                 event.getOnboardingRequestId(), event.getCorrelationId());

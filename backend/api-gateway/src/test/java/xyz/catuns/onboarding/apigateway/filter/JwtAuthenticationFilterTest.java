@@ -119,7 +119,7 @@ class JwtAuthenticationFilterTest {
     @Test
     void filter_validToken_withCorrelationId_forwardsUserIdAndCorrelationIdHeaders() {
         String token = "valid.jwt.token";
-        Payload payload = new Payload("user-123", "corr-abc");
+        Payload payload = new Payload("user-123", "corr-abc", false);
 
         MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/users/me")
                 .header("Authorization", "Bearer " + token)
@@ -143,7 +143,7 @@ class JwtAuthenticationFilterTest {
     @Test
     void filter_validToken_withNullCorrelationId_generatesRandomUuidAsCorrelationId() {
         String token = "valid.jwt.token";
-        Payload payload = new Payload("user-456", null);
+        Payload payload = new Payload("user-456", null, false);
 
         MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/onboarding/status")
                 .header("Authorization", "Bearer " + token)
@@ -192,7 +192,7 @@ class JwtAuthenticationFilterTest {
     void filter_tokenWithSurroundingSpaces_trimsBeforeValidation() {
         String rawToken = "  trimmed.jwt.token  ";
         String trimmedToken = "trimmed.jwt.token";
-        Payload payload = new Payload("user-789", "corr-xyz");
+        Payload payload = new Payload("user-789", "corr-xyz", false);
 
         MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/onboarding/status")
                 .header("Authorization", "Bearer" + rawToken)

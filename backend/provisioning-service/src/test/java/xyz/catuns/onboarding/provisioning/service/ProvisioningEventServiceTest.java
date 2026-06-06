@@ -1,10 +1,12 @@
 package xyz.catuns.onboarding.provisioning.service;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.catuns.onboarding.common.events.AtlassianProvisioningRequestedV1;
 import xyz.catuns.onboarding.common.events.GithubProvisioningRequestedV1;
@@ -12,9 +14,14 @@ import xyz.catuns.onboarding.provisioning.TestcontainersConfiguration;
 import xyz.catuns.onboarding.provisioning.domain.OutboxEvent;
 import xyz.catuns.onboarding.provisioning.domain.ProvisioningAuditLog;
 import xyz.catuns.onboarding.provisioning.domain.ResultState;
+import xyz.catuns.onboarding.provisioning.github.GithubMembershipResult;
+import xyz.catuns.onboarding.provisioning.github.GithubProvisioningAdapter;
 import xyz.catuns.onboarding.provisioning.outbox.OutboxEventPublisher;
 import xyz.catuns.onboarding.provisioning.repository.OutboxEventRepository;
 import xyz.catuns.onboarding.provisioning.repository.ProvisioningAuditLogRepository;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.List;
@@ -24,15 +31,25 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
+@TestPropertySource(properties = {
+    "github.api.base-url=https://api.github.com",
+    "github.api.token=test-token",
+    "github.api.org=test-org"
+})
 class ProvisioningEventServiceTest {
 
     @Autowired private ProvisioningEventService eventService;
     @Autowired private ProvisioningAuditLogRepository auditLogRepository;
     @Autowired private OutboxEventRepository outboxEventRepository;
 
-    // Prevent the @Scheduled publisher from attempting KafkaAvroSerializer
-    // (Schema Registry is not available in the test environment)
     @MockBean private OutboxEventPublisher outboxEventPublisher;
+    @MockBean private GithubProvisioningAdapter githubAdapter;
+
+    @BeforeEach
+    void setUp() {
+        when(githubAdapter.addTeamMember(any(), any(), any()))
+                .thenReturn(new GithubMembershipResult("ACTIVE", true, null, null));
+    }
 
     // ── GithubProvisioningRequestedV1 ────────────────────────────────────────────
 
@@ -91,6 +108,57 @@ class ProvisioningEventServiceTest {
         assertThat(outboxEventRepository.count()).isEqualTo(1);
     }
 
+    // ── Audit log enrichment (story 3) ──────────────────────────────────────────
+
+    @Test
+    @Transactional
+    void handleGithubProvisioningRequested_activeResult_auditLogHasResponsePayloadAndSuccessState() {
+        // @BeforeEach already stubs ACTIVE; explicit for readability
+        when(githubAdapter.addTeamMember(any(), any(), any()))
+                .thenReturn(new GithubMembershipResult("ACTIVE", true, null, null));
+
+        eventService.handleGithubProvisioningRequested(githubRequestedEvent());
+
+        ProvisioningAuditLog log = auditLogRepository.findAll().getFirst();
+        assertThat(log.getResultState()).isEqualTo(ResultState.SUCCESS);
+        assertThat(log.getResponsePayload())
+                .isNotNull()
+                .contains("\"membershipState\":\"ACTIVE\"")
+                .contains("\"success\":true");
+    }
+
+    @Test
+    @Transactional
+    void handleGithubProvisioningRequested_pendingResult_auditLogHasPendingResultState() {
+        when(githubAdapter.addTeamMember(any(), any(), any()))
+                .thenReturn(new GithubMembershipResult("PENDING", true, null, null));
+
+        eventService.handleGithubProvisioningRequested(githubRequestedEvent());
+
+        ProvisioningAuditLog log = auditLogRepository.findAll().getFirst();
+        assertThat(log.getResultState()).isEqualTo(ResultState.PENDING);
+        assertThat(log.getResponsePayload())
+                .isNotNull()
+                .contains("\"membershipState\":\"PENDING\"");
+    }
+
+    @Test
+    @Transactional
+    void handleGithubProvisioningRequested_failedResult_auditLogHasFailureStateAndErrorCode() {
+        when(githubAdapter.addTeamMember(any(), any(), any()))
+                .thenReturn(new GithubMembershipResult("FAILED", false, "USER_OR_TEAM_NOT_FOUND", "404 Not Found"));
+
+        eventService.handleGithubProvisioningRequested(githubRequestedEvent());
+
+        ProvisioningAuditLog log = auditLogRepository.findAll().getFirst();
+        assertThat(log.getResultState()).isEqualTo(ResultState.FAILURE);
+        assertThat(log.getResponsePayload())
+                .isNotNull()
+                .contains("\"membershipState\":\"FAILED\"")
+                .contains("\"success\":false")
+                .contains("USER_OR_TEAM_NOT_FOUND");
+    }
+
     // ── AtlassianProvisioningRequestedV1 ────────────────────────────────────────
 
     @Test
@@ -135,6 +203,39 @@ class ProvisioningEventServiceTest {
         assertThat(outbox.getPayload())
                 .contains("\"success\":true")
                 .contains("\"eventType\":\"AtlassianProvisioningCompletedV1\"");
+    }
+
+    // ── Outbox payload by membership state (story 4) ────────────────────────────
+
+    @Test
+    @Transactional
+    void handleGithubProvisioningRequested_pendingResult_outboxPayloadHasPendingStateAndSuccessTrue() {
+        when(githubAdapter.addTeamMember(any(), any(), any()))
+                .thenReturn(new GithubMembershipResult("PENDING", true, null, null));
+
+        eventService.handleGithubProvisioningRequested(githubRequestedEvent());
+
+        OutboxEvent outbox = outboxEventRepository.findByPublishedFalseOrderByCreatedAtAsc().getFirst();
+        assertThat(outbox.getPayload())
+                .contains("\"membershipState\":\"PENDING\"")
+                .contains("\"success\":true")
+                .contains("\"eventType\":\"GithubProvisioningCompletedV1\"");
+    }
+
+    @Test
+    @Transactional
+    void handleGithubProvisioningRequested_failedResult_outboxPayloadHasFailedStateSuccessFalseAndErrorCode() {
+        when(githubAdapter.addTeamMember(any(), any(), any()))
+                .thenReturn(new GithubMembershipResult("FAILED", false, "USER_OR_TEAM_NOT_FOUND", "404 Not Found"));
+
+        eventService.handleGithubProvisioningRequested(githubRequestedEvent());
+
+        OutboxEvent outbox = outboxEventRepository.findByPublishedFalseOrderByCreatedAtAsc().getFirst();
+        assertThat(outbox.getPayload())
+                .contains("\"membershipState\":\"FAILED\"")
+                .contains("\"success\":false")
+                .contains("USER_OR_TEAM_NOT_FOUND")
+                .contains("\"eventType\":\"GithubProvisioningCompletedV1\"");
     }
 
     // ── Outbox routing ───────────────────────────────────────────────────────────

@@ -6,27 +6,27 @@ scrape_configs:
   - job_name: api-gateway
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['host.docker.internal:8080']
+      - targets: ['api-gateway:8080']
         labels:
           service: api-gateway
 
   - job_name: user-service
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['host.docker.internal:8081']
+      - targets: ['users:8080']
         labels:
           service: user-service
 
   - job_name: onboarding-service
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['host.docker.internal:8082']
+      - targets: ['onboarding:8080']
         labels:
           service: onboarding-service
 
   - job_name: provisioning-service
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['host.docker.internal:8083']
+      - targets: ['provisioning:8080']
         labels:
           service: provisioning-service

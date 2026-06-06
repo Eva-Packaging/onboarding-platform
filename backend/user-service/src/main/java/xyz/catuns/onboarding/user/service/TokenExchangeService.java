@@ -8,10 +8,12 @@ import xyz.catuns.onboarding.user.api.dto.TokenExchangeRequest;
 import xyz.catuns.onboarding.user.api.dto.TokenResponse;
 import xyz.catuns.onboarding.user.client.GitHubApiClient;
 import xyz.catuns.onboarding.user.client.GitHubUserResponse;
+import xyz.catuns.onboarding.user.domain.AppRoleKey;
 import xyz.catuns.onboarding.user.domain.ExternalIdentity;
 import xyz.catuns.onboarding.user.domain.ProviderKey;
 import xyz.catuns.onboarding.user.exception.GitHubAuthenticationException;
 import xyz.catuns.onboarding.user.repository.ExternalIdentityRepository;
+import xyz.catuns.onboarding.user.repository.UserRoleAssignmentRepository;
 import xyz.catuns.spring.jwt.core.model.JwtToken;
 
 import java.time.Duration;
@@ -24,13 +26,16 @@ public class TokenExchangeService {
 
     private final GitHubApiClient gitHubApiClient;
     private final ExternalIdentityRepository identityRepository;
+    private final UserRoleAssignmentRepository roleAssignmentRepository;
     private final PayloadTokenProvider tokenProvider;
 
     public TokenExchangeService(GitHubApiClient gitHubApiClient,
                                 ExternalIdentityRepository identityRepository,
+                                UserRoleAssignmentRepository roleAssignmentRepository,
                                 PayloadTokenProvider tokenProvider) {
         this.gitHubApiClient = gitHubApiClient;
         this.identityRepository = identityRepository;
+        this.roleAssignmentRepository = roleAssignmentRepository;
         this.tokenProvider = tokenProvider;
     }
 
@@ -43,10 +48,13 @@ public class TokenExchangeService {
                 .orElseThrow(() -> new NoSuchElementException(
                         "No registered user found for GitHub account: " + githubUser.login()));
 
-        String internalUserId = identity.getUserProfile().getId().toString();
+        UUID internalUserProfileId = identity.getUserProfile().getId();
+        String internalUserId = internalUserProfileId.toString();
+        boolean isAdmin = roleAssignmentRepository
+                .existsByUserProfile_IdAndAppRole_RoleKey(internalUserProfileId, AppRoleKey.ADMIN);
 
         JwtToken jwtToken = tokenProvider.generate(
-                new Payload(internalUserId, UUID.randomUUID().toString()));
+                new Payload(internalUserId, UUID.randomUUID().toString(), isAdmin));
 
         long expiresIn = Duration.between(Instant.now(), jwtToken.expiration()).getSeconds();
         return TokenResponse.builder()

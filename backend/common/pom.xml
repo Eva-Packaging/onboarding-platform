@@ -66,15 +66,19 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <version>0.9.0</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <publishingServerId>central</publishingServerId>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 
     <repositories>
-        <repository>
-            <id>repolite-releases</id>
-            <name>Catuns lite Repository</name>
-            <url>https://repolite.catuns.xyz/releases</url>
-        </repository>
         <repository>
             <id>confluent</id>
             <name>Confluent Maven Repository</name>

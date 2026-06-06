@@ -1,0 +1,19 @@
+app:
+  open-api:
+    description: provisioning-service
+    title: Provisioning Service
+    version: 0.0.1-SNAPSHOT
+
+github:
+  api:
+    base-url: https://api.github.com
+    token: test-token
+    org: test-org
+
+jwt:
+  secret: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+spring:
+  kafka:
+    properties:
+      schema-registry-url: mock://test

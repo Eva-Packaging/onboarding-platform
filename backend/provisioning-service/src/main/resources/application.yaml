@@ -8,9 +8,9 @@ app:
       github-provisioning-dlt: edu.provisioning.github.v1.DLT
       atlassian-provisioning-dlt: edu.provisioning.atlassian.v1.DLT
   open-api:
-    description: @project.description@
-    title: @project.name@
-    version: @project.version@
+    description: '@project.description@'
+    title: '@project.name@'
+    version: '@project.version@'
 spring:
   application:
     name: provisioning-service
@@ -79,6 +79,11 @@ management:
   zipkin:
     tracing:
       endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
+github:
+  api:
+    base-url: https://api.github.com
+    token: ${GITHUB_API_TOKEN}
+    org: ${GITHUB_ORG}
 jwt:
   secret: ${JWT_SECRET}
   issuer: ${spring.application.name}
