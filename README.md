@@ -60,10 +60,16 @@ backend/
   user-service/
   onboarding-service/
   provisioning-service/
+  api-gateway/
 infra/
   docker/
   terraform/
+scripts/
+  docker/        build-images.sh
+  gcloud/        deploy-service.sh, install/
+  terraform/     install/
 docs/
+Makefile
 ```
 
 ## Initial Setup
@@ -83,6 +89,28 @@ docs/
 - Deploy Spring Boot services and the web application to Cloud Run.
 - Store provider credentials in Secret Manager rather than in application configuration files.
 - Manage all infrastructure changes through Terraform modules and environment-specific variable sets.
+
+## Build, Image & Deploy
+
+The root `Makefile` drives Maven builds, Docker image builds (Spring Boot
+Buildpacks → GCP Artifact Registry), and Cloud Run deploys, all configured from
+a single `.env` file:
+
+```bash
+cp .env.example .env        # fill in GCP_PROJECT_ID, GCP_REGION, GCP_REPOSITORY, etc.
+
+make build                  # Maven build for all backend services
+make docker-push            # build images and push to Artifact Registry
+make deploy                 # rolling Cloud Run image update
+```
+
+`gcloud` and `terraform` aren't expected to be installed manually — use the
+cross-platform installers under `scripts/gcloud/install/` and
+`scripts/terraform/install/` (Linux/macOS/Windows).
+
+See `docs/build-and-deploy.md` for the full command reference, and
+`infra/terraform/` for the GCP infrastructure modules (Cloud Run, Cloud SQL,
+Secret Manager, IAM).
 
 ## Operational Notes
 
