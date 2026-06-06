@@ -7,8 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 frontend/          Nx monorepo (pnpm) — Next.js app + auth feature library
 backend/          Spring Boot microservices (Maven multi-module)
-infra/docker/      Docker Compose for local Postgres + Kafka + Schema Registry + Consul
-infra/terraform/   GCP infrastructure (Cloud Run, Cloud SQL, Secret Manager) — scaffolded only
+infra/docker/      Local Postgres/Kafka/Grafana config mounted into docker-compose.yml (compose file lives at repo root)
+infra/terraform/   GCP infrastructure modules (Cloud Run, Cloud SQL, Secret Manager, IAM) — scaffolded, validated, not yet applied
+scripts/           Build/deploy automation (Makefile targets) and cross-platform CLI install scripts
 docs/              Authoritative specs — treat as source of truth
 ```
 
@@ -64,14 +65,16 @@ Backend integration tests use **TestContainers** — Docker must be running loca
 ## Local infrastructure
 
 ```bash
-# Start Postgres + Kafka + Schema Registry + Consul
-docker compose -f infra/docker/docker-compose.yml up -d
+# Start Postgres + Kafka + Schema Registry + Consul (compose file lives at repo root;
+# infra/docker/ holds mounted config for Postgres init scripts, Kafka, Prometheus, Grafana)
+docker compose up -d
 
 # Stop
-docker compose -f infra/docker/docker-compose.yml down
+docker compose down
 
-# Env vars — copy and fill before first run
-cp infra/docker/.env.example infra/docker/.env
+# Env vars — copy and fill before first run (also used by the Makefile and
+# scripts/ for image builds, pushes, and Cloud Run deploys — see below)
+cp .env.example .env
 ```
 
 | Component       | Port | Notes                                                                         |
@@ -85,6 +88,37 @@ cp infra/docker/.env.example infra/docker/.env
 | Grafana         | 3001 | Dashboards; Prometheus datasource pre-wired; default login admin/admin        |
 
 Each Spring Boot service connects to its own database. Services register with Consul on startup; the api-gateway resolves routes dynamically from Consul discovery.
+
+## Build, image & deploy commands
+
+The root `Makefile` wraps Maven builds, Docker image builds (Spring Boot
+Buildpacks → GCP Artifact Registry), and Cloud Run deploys. It loads
+configuration from `.env` (`GCP_PROJECT_ID`, `GCP_REGION`, `GCP_REPOSITORY`, …) —
+copy `.env.example` to `.env` and fill in values first. Full details: `docs/build-and-deploy.md`.
+
+```bash
+# Maven
+make build / test / clean              # all 4 services; or build-<service> / test-<service>
+
+# Docker images (delegates to scripts/docker/build-images.sh)
+make docker-build                      # build locally with Buildpacks
+make docker-push                       # build + push to Artifact Registry
+make docker-push-user-service          # single service (also: users/onboarding/provisioning/apigw shortcuts)
+
+# Cloud Run deploy (delegates to scripts/gcloud/deploy-service.sh)
+make deploy                            # rolling image-only update (CI/CD default; Terraform owns the rest)
+make deploy-api-gateway                # single service; pass --full-config/--dry-run directly to the script for bootstrapping
+```
+
+`docker-compose.yml` pulls the same backend images by composing the Artifact
+Registry path directly from `GCP_REGION`/`GCP_PROJECT_ID`/`GCP_REPOSITORY` in
+each `image:` line (`${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_REPOSITORY}/<service>:latest`)
+rather than through an intermediate `.env` variable — Compose does not expand
+nested `${...}` references inside `.env` files.
+
+`terraform`/`gcloud` are not installed directly — use the cross-platform
+installers in `scripts/terraform/install/` and `scripts/gcloud/install/`
+(`install-linux.sh` / `install-mac.sh` / `install-windows.ps1`).
 
 ## Architecture overview
 
@@ -157,10 +191,11 @@ These patterns are used consistently across all backend services — follow them
 | `docs/schemas/normalized-database-schema.md` | Canonical DB schema — don't add tables without updating this |
 | `docs/schemas/kafka-event-schema.md` | Avro schemas, topic names, compatibility rules |
 | `docs/roadmap.md` | Phased delivery plan; each phase has explicit exit criteria |
+| `docs/build-and-deploy.md` | Makefile targets, image build/push, and Cloud Run deploy scripts |
 
 ## Delivery phase status
 
-Phases 0–3 are complete (project setup → domain → registration API → onboarding orchestration). Active work is on Phase 4 (Kafka event foundation) and the api-gateway (EDP-224). Phases 5–9 (provisioning adapters, frontend UX, admin tooling, GCP deployment) are upcoming.
+Phases 0–3 are complete (project setup → domain → registration API → onboarding orchestration). Active work is on Phase 4 (Kafka event foundation), the api-gateway (EDP-224), and GCP infrastructure scaffolding (EDP-74 — Terraform modules for Cloud Run/Cloud SQL/Secret Manager/IAM are written and `terraform validate`-clean, but not yet applied to a real project). Phases 5–9 (provisioning adapters, frontend UX, admin tooling, GCP deployment) are upcoming.
 
 ## Backlog generation
 

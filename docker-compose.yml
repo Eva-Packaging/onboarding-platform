@@ -1,12 +1,14 @@
 name: onboarding
 services:
   api-gateway:
-    image: api-gateway:0.0.1-SNAPSHOT
+    image: ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_REPOSITORY}/api-gateway:latest
     ports:
       - "8080:8080"
     environment:
       SPRING_PROFILES_ACTIVE: docker
       CONSUL_HOST: 0.0.0.0
+      JWT_SECRET: ${JWT_SECRET}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:4200}
     depends_on:
       - consul
     networks:
@@ -14,8 +16,8 @@ services:
       - observability
     restart: unless-stopped
 
-  users:
-    image: user-service:0.0.1-SNAPSHOT
+  user-service:
+    image: ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_REPOSITORY}/user-service:latest
     environment:
       SPRING_PROFILES_ACTIVE: docker
       JWT_SECRET: ${JWT_SECRET}
@@ -31,12 +33,33 @@ services:
       - postgres
     restart: unless-stopped
 
-  onboarding:
-    image: onboarding-service:0.0.1-SNAPSHOT
+  onboarding-service:
+    image: ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_REPOSITORY}/onboarding-service:latest
     environment:
       SPRING_PROFILES_ACTIVE: docker
       JWT_SECRET: ${JWT_SECRET}
       JWT_SECURITY_PUBLIC_PATHS: "/**"
+    depends_on:
+      - consul
+      - postgres
+      - kafka
+    networks:
+      - microservice
+      - observability
+      - kafka-net
+      - postgres
+    restart: unless-stopped
+
+  provisioning-service:
+    image: ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_REPOSITORY}/provisioning-service:latest
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_SECURITY_PUBLIC_PATHS: "/**"
+      GITHUB_API_TOKEN: ${GITHUB_API_TOKEN}
+      GITHUB_ORG: ${GITHUB_ORG}
+      ATLASSIAN_API_KEY: ${ATLASSIAN_API_KEY}
+      ATLASSIAN_ACCOUNT_EMAIL: ${ATLASSIAN_ACCOUNT_EMAIL}
     depends_on:
       - consul
       - postgres
