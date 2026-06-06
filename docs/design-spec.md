@@ -31,7 +31,7 @@ These behaviors must be preserved whenever agents modify or extend the codebase.
     - Identity correlation (GitHub ↔ Atlassian).
     - GitHub team provisioning.
     - Atlassian/Jira group provisioning.
-- REST APIs as described in [rest-api-reference.md](rest-api-reference.md) and [request-flow.md](request-flow.md).
+- REST APIs as described in [rest-api-reference.md](schemas/rest-api-reference.md) and [request-flow.md](request-flow.md).
 - Kafka event contracts described in [kafka-event-schema.md](schemas/kafka-event-schema.md) (Avro + Schema Registry).
 - Database schema described in [normalized-database-schema](schemas/normalized-database-schema.md).
 - Next.js integration at the HTTP boundary (assume frontend has already done GitHub auth).
