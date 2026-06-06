@@ -1,3 +1,22 @@
-.terraform*
-*tfplan
-*tfstate*
+# Terraform state — never commit
+*.tfstate
+*.tfstate.backup
+
+# Terraform plans
+*.tfplan
+
+# Terraform working directory (populated by terraform init)
+.terraform/
+
+# Local variable overrides — may contain sensitive values
+terraform.tfvars
+*.auto.tfvars
+secret.tfvars
+
+# Override files (local-only customisations)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Provider lock file IS committed — do not add .terraform.lock.hcl here
