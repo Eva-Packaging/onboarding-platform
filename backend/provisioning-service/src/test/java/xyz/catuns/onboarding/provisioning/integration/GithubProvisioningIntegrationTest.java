@@ -11,9 +11,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.TestPropertySource;
 import xyz.catuns.onboarding.common.events.GithubProvisioningRequestedV1;
 import xyz.catuns.onboarding.provisioning.TestcontainersConfiguration;
 import xyz.catuns.onboarding.provisioning.domain.OutboxEvent;
@@ -47,12 +47,7 @@ import static org.awaitility.Awaitility.await;
  */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
-@TestPropertySource(properties = {
-    "github.api.token=test-token",
-    "github.api.org=test-org",
-    "spring.kafka.properties.schema-registry-url=mock://test",
-    "jwt.secret=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-})
+@ActiveProfiles("test")
 class GithubProvisioningIntegrationTest {
 
     @RegisterExtension

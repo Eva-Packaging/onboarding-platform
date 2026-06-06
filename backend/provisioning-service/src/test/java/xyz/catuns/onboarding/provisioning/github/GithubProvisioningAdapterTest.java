@@ -4,6 +4,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -21,6 +23,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 @SuppressWarnings("unchecked")
 class GithubProvisioningAdapterTest {
 
@@ -35,7 +38,7 @@ class GithubProvisioningAdapterTest {
         responseSpec = mock(RestClient.ResponseSpec.class);
 
         when(restClient.put()).thenReturn(uriSpec);
-        when(uriSpec.uri(anyString(), (Object[]) any())).thenReturn(bodySpec);
+        when(uriSpec.uri(anyString(), any(), any(), any())).thenReturn(bodySpec);
         when(bodySpec.retrieve()).thenReturn(responseSpec);
 
         adapter = new GithubProvisioningAdapter(restClient);

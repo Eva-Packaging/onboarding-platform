@@ -8,9 +8,9 @@ app:
       github-provisioning-dlt: edu.provisioning.github.v1.DLT
       atlassian-provisioning-dlt: edu.provisioning.atlassian.v1.DLT
   open-api:
-    description: @project.description@
-    title: @project.name@
-    version: @project.version@
+    description: '@project.description@'
+    title: '@project.name@'
+    version: '@project.version@'
 spring:
   application:
     name: provisioning-service
