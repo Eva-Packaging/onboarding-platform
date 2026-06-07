@@ -4,6 +4,7 @@
 project_id          = "onboarding-platform-dev"
 region              = "us-central1"
 environment         = "dev"
+gcp_repository      = "onboarding"
 vpc_network         = "projects/onboarding-platform-dev/global/networks/default"
 
 db_tier             = "db-f1-micro"

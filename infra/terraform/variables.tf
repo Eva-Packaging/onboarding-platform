@@ -18,6 +18,11 @@ variable "environment" {
   }
 }
 
+variable "gcp_repository" {
+  type        = string
+  description = "Artifact Registry repository ID — must match GCP_REPOSITORY in .env so docker-compose.yml and the build/push pipeline resolve to this repository."
+}
+
 variable "vpc_network" {
   type        = string
   description = "Self-link of the VPC network used for private Cloud SQL connectivity."

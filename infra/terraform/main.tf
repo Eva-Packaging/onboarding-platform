@@ -7,6 +7,13 @@ locals {
   }
 }
 
+module "artifact_registry" {
+  source        = "./modules/artifact-registry"
+  project_id    = var.project_id
+  region        = var.region
+  repository_id = var.gcp_repository
+}
+
 module "iam" {
   source            = "./modules/iam"
   project_id        = var.project_id
