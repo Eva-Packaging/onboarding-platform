@@ -42,3 +42,8 @@ output "secret_ids" {
   description = "Map of secret name to full Secret Manager resource ID."
   value       = module.secrets.secret_ids
 }
+
+output "image_builder_service_account_email" {
+  description = "Email of the CI/CD service account with push (roles/artifactregistry.writer) access to the Artifact Registry repository — use this identity for make docker-push in CI."
+  value       = module.iam.image_builder_service_account_email
+}

@@ -181,3 +181,49 @@ variables in each service's `image:` line:
 ```yaml
 image: ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_REPOSITORY}/user-service:latest
 ```
+
+## Artifact Registry access
+
+`infra/terraform/modules/artifact-registry` provisions the Docker repository
+itself; `infra/terraform/modules/iam` grants least-privilege access to it via
+`google_artifact_registry_repository_iam_member` bindings:
+
+- **`image-builder`** service account — `roles/artifactregistry.writer` on the
+  repository. Use this identity (its email is exposed as the
+  `image_builder_service_account_email` Terraform output) for `make docker-push`
+  in CI/CD; `gcloud auth configure-docker <region>-docker.pkg.dev` authenticates
+  against it.
+- **Per-service Cloud Run service accounts** — `roles/artifactregistry.reader`
+  on the repository, so each service's runtime identity can pull its own image.
+
+## Bootstrap sequence for a fresh environment
+
+Putting the pieces above together, standing up a new environment from scratch
+looks like:
+
+```bash
+# 1. Enable APIs and create the Terraform state bucket
+./scripts/gcloud/bootstrap-project.sh
+
+# 2. Initialize Terraform against the real backend and provision
+#    the Artifact Registry repository + IAM bindings
+cd infra/terraform
+terraform init \
+  -backend-config="bucket=${GCP_PROJECT_ID}-tf-state" \
+  -backend-config="prefix=terraform/state/dev"
+terraform apply -var-file=environments/dev.tfvars
+cd ../..
+
+# 3. Build and push real images to the now-existing repository
+gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev
+make docker-push
+
+# 4. Confirm docker-compose resolves and pulls from the real registry
+docker compose pull
+docker compose up -d
+```
+
+`docker compose config | grep image:` is a quick way to confirm the resolved
+image path before running `pull`/`up` — it should match the
+`<GCP_REGION>-docker.pkg.dev/<GCP_PROJECT_ID>/<GCP_REPOSITORY>/<service>:latest`
+shape described above.
