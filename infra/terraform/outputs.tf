@@ -1,3 +1,8 @@
+output "artifact_registry_url" {
+  description = "Docker registry path for built service images: <region>-docker.pkg.dev/<project>/<repository> — matches the path docker-compose.yml and the build/push scripts already compose."
+  value       = module.artifact_registry.repository_url
+}
+
 output "web_url" {
   description = "Public URL of the web application Cloud Run service."
   value       = module.cloud_run_web.service_url
@@ -36,4 +41,9 @@ output "service_account_emails" {
 output "secret_ids" {
   description = "Map of secret name to full Secret Manager resource ID."
   value       = module.secrets.secret_ids
+}
+
+output "image_builder_service_account_email" {
+  description = "Email of the CI/CD service account with push (roles/artifactregistry.writer) access to the Artifact Registry repository — use this identity for make docker-push in CI."
+  value       = module.iam.image_builder_service_account_email
 }

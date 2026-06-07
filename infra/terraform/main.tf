@@ -7,11 +7,20 @@ locals {
   }
 }
 
+module "artifact_registry" {
+  source        = "./modules/artifact-registry"
+  project_id    = var.project_id
+  region        = var.region
+  repository_id = var.gcp_repository
+}
+
 module "iam" {
-  source            = "./modules/iam"
-  project_id        = var.project_id
-  service_names     = local.all_services
-  sql_service_names = local.backend_services
+  source                          = "./modules/iam"
+  project_id                      = var.project_id
+  service_names                   = local.all_services
+  sql_service_names               = local.backend_services
+  artifact_registry_location      = var.region
+  artifact_registry_repository_id = module.artifact_registry.repository_id
 }
 
 module "secrets" {
