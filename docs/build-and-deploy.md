@@ -105,6 +105,38 @@ For each service it:
 4. With `--push`, pushes both tags to Artifact Registry (run
    `gcloud auth configure-docker <registry>` first if push fails).
 
+## scripts/gcloud/bootstrap-project.sh
+
+One-time bootstrap for a fresh GCP project, run **before** `terraform init`.
+
+```bash
+./scripts/gcloud/bootstrap-project.sh                                            # uses GCP_PROJECT_ID / GCP_REGION from .env
+./scripts/gcloud/bootstrap-project.sh --project onboarding-platform-dev          # override the project
+./scripts/gcloud/bootstrap-project.sh --state-bucket my-custom-tf-state-bucket   # override the state bucket name
+./scripts/gcloud/bootstrap-project.sh --dry-run                                  # print gcloud/gsutil commands only
+```
+
+It enables the APIs Terraform and the build pipeline depend on
+(`artifactregistry.googleapis.com`, `iam.googleapis.com`,
+`cloudresourcemanager.googleapis.com`) and creates a versioned GCS bucket to
+hold Terraform remote state, named from `GCP_TF_STATE_BUCKET` in `.env`
+(falling back to `<GCP_PROJECT_ID>-tf-state` if left blank — same default/override
+pattern as `GCP_PROJECT_ID`/`GCP_REGION`/`GCP_REPOSITORY`). `--state-bucket`
+overrides both for a one-off run.
+
+This step stays a script rather than a Terraform resource because Terraform
+cannot create the bucket that stores its own state — the same
+bootstrap-before-Terraform gap that `deploy-service.sh --full-config` bridges
+for Cloud Run. Once it's run, point Terraform at the bucket:
+
+```bash
+cd infra/terraform
+terraform init \
+  -backend-config="bucket=<GCP_PROJECT_ID>-tf-state" \
+  -backend-config="prefix=terraform/state/dev"
+terraform plan -var-file=environments/dev.tfvars
+```
+
 ## scripts/gcloud/deploy-service.sh
 
 Deploys backend services to Cloud Run.

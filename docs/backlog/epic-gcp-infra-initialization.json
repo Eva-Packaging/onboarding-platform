@@ -1,0 +1,139 @@
+{
+  "summary": "Initialize core GCP infrastructure (project bootstrap, Terraform state, Artifact Registry) for image builds",
+  "description": "EDP-74 scaffolded the Terraform modules under <infra/terraform/> (`cloud-run`, `cloud-sql`, `secret-manager`, `iam`) and validated them with `terraform validate`, but nothing has been applied to a real GCP project yet — `service_images` are placeholder stubs and the GCS state backend is unconfigured. This epic stands up only the minimal real GCP footprint needed for the build/push pipeline to work: a scripted project bootstrap (enabling APIs and creating the Terraform state bucket — Terraform can't manage the bucket that stores its own state, so this stays a `gcloud` script consistent with the existing `scripts/gcloud/` convention), then a Terraform-managed Artifact Registry Docker repository and least-privilege IAM bindings, since <docker-compose.yml> and `scripts/docker/build-images.sh` already compose image paths in the form `${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_REPOSITORY}/<service>:latest` and currently have nothing real to resolve against. Cloud Run, Cloud SQL, and Secret Manager rollout remain explicitly out of scope here and are deferred to the later GCP-deployment phase described in <docs/roadmap.md> (Phase 9).",
+  "labels": [
+    "terraform",
+    "gcp",
+    "artifact-registry",
+    "infrastructure",
+    "devops"
+  ],
+  "priority": "High",
+  "userType": "operations engineer",
+  "functionality": "bootstrap the core GCP project and Terraform remote state via script, then provision an Artifact Registry Docker repository with least-privilege access via Terraform, so built service images can be pushed to and pulled from a real registry",
+  "benefit": "the existing build/push/compose pipeline, which already assumes an Artifact Registry path, can run against real infrastructure instead of placeholder stubs, unblocking image-based local and CI workflows",
+  "stories": [
+    {
+      "summary": "Script the GCP project bootstrap and Terraform state bucket creation",
+      "description": "Add a `scripts/gcloud/bootstrap-project.sh` script that enables the GCP APIs Terraform and the build pipeline depend on (Artifact Registry, IAM, Cloud Resource Manager) and creates a dedicated, versioned GCS bucket for Terraform state. This stays scripted rather than Terraform-managed because Terraform cannot create the bucket that stores its own state — a chicken-and-egg problem the project already works around for Cloud Run via `deploy-service.sh --full-config`. Once the bucket exists, configure <infra/terraform/backend.tf> via `-backend-config` so `terraform init`/`terraform plan` run cleanly against the real project instead of `-backend=false`.",
+      "labels": [
+        "gcp",
+        "bootstrap",
+        "scripting"
+      ],
+      "priority": "High",
+      "storyPoints": 3,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Bootstrap script enables required APIs and creates the state bucket",
+          "given": "a target GCP project ID is supplied to the script",
+          "when": "`./scripts/gcloud/bootstrap-project.sh --project <project-id> --region <region>` is run",
+          "then": "the Artifact Registry, IAM, and Cloud Resource Manager APIs are enabled and a versioned GCS bucket for Terraform state exists in the project"
+        },
+        {
+          "scenario": "Remote state initializes against the bootstrapped project",
+          "given": "the bootstrap script has created the state bucket and enabled required APIs",
+          "when": "`terraform init -backend-config=\"bucket=<state-bucket>\" -backend-config=\"prefix=terraform/state/dev\"` is run from <infra/terraform/>",
+          "then": "Terraform initializes successfully and reports the GCS backend is configured"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Write scripts/gcloud/bootstrap-project.sh",
+          "description": "Create a script that runs `gcloud services enable` for Artifact Registry, IAM, and Cloud Resource Manager, and creates a versioned GCS bucket for Terraform state, following the flag conventions of the existing `scripts/gcloud/deploy-service.sh`."
+        },
+        {
+          "summary": "Wire backend config and verify init/plan",
+          "description": "Run `terraform init -backend-config=...` and `terraform plan` against the bootstrapped project, and capture the verified bootstrap-then-init sequence in <docs/build-and-deploy.md>."
+        },
+        {
+          "summary": "Add bootstrap script to install/setup docs",
+          "description": "Document `bootstrap-project.sh` usage and prerequisites alongside the existing `scripts/gcloud/install/` guidance in <docs/build-and-deploy.md>."
+        }
+      ]
+    },
+    {
+      "summary": "Add and apply Artifact Registry Terraform module",
+      "description": "Add a minimal `modules/artifact-registry` Terraform module wrapping `google_artifact_registry_repository` (format DOCKER), wire it into <infra/terraform/main.tf> alongside the existing `iam`/`secrets`/`cloud_sql` modules, and apply it so the registry path that <docker-compose.yml> already composes — `${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_REPOSITORY}` — resolves to a real repository.",
+      "labels": [
+        "terraform",
+        "artifact-registry",
+        "gcp"
+      ],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Artifact Registry module provisions a Docker repository",
+          "given": "the new `modules/artifact-registry` module is wired into <infra/terraform/main.tf> with the repository name driven by a `gcp_repository` variable",
+          "when": "`terraform apply -var-file=environments/dev.tfvars` is run against the bootstrapped project",
+          "then": "a `google_artifact_registry_repository` of format DOCKER exists at the configured region and project"
+        },
+        {
+          "scenario": "Outputs expose the resolved registry path",
+          "given": "the artifact-registry module has been applied",
+          "when": "`terraform output` is run from <infra/terraform/>",
+          "then": "the resolved registry path matches the `${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_REPOSITORY}` format already assumed in <docker-compose.yml>"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Scaffold modules/artifact-registry",
+          "description": "Create a minimal module exposing `repository_id`, `location`, and `format = \"DOCKER\"` via `google_artifact_registry_repository`, with a `repository_url` output."
+        },
+        {
+          "summary": "Wire module into root configuration",
+          "description": "Add a `module \"artifact_registry\"` block to <infra/terraform/main.tf>, a `gcp_repository` variable to <infra/terraform/variables.tf>, and expose `artifact_registry_url` in <infra/terraform/outputs.tf>."
+        },
+        {
+          "summary": "Apply and verify the repository exists",
+          "description": "Run `terraform apply` against the dev environment and confirm the repository appears in `gcloud artifacts repositories list`."
+        }
+      ]
+    },
+    {
+      "summary": "Grant push/pull access and validate the build pipeline against the real registry",
+      "description": "Extend the Terraform `iam` module with least-privilege bindings on the new Artifact Registry repository — `roles/artifactregistry.writer` for the CI/build identity and `roles/artifactregistry.reader` for pull identities — then validate the existing pipeline end to end: `make docker-push` pushes a real image and `docker compose up` pulls it from Artifact Registry.",
+      "labels": [
+        "iam",
+        "artifact-registry",
+        "ci-cd",
+        "validation"
+      ],
+      "priority": "Medium",
+      "storyPoints": 3,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Build identity can push images",
+          "given": "an IAM binding grants `roles/artifactregistry.writer` on the Artifact Registry repository to the CI/build service account",
+          "when": "`make docker-push-user-service` is run with `.env` pointing at the real `GCP_PROJECT_ID`/`GCP_REGION`/`GCP_REPOSITORY`",
+          "then": "the image pushes successfully and appears in `gcloud artifacts docker images list`"
+        },
+        {
+          "scenario": "docker compose pulls the pushed image",
+          "given": "a service image has been pushed to the new Artifact Registry repository",
+          "when": "`docker compose up -d user-service` is run with the `.env` GCP variables set",
+          "then": "Compose pulls and starts the container from the real Artifact Registry path rather than failing on a missing image"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Extend iam module with registry bindings",
+          "description": "Add least-privilege bindings granting `roles/artifactregistry.writer` to the build identity and `roles/artifactregistry.reader` to pull identities on the new repository, in <infra/terraform/modules/iam/>."
+        },
+        {
+          "summary": "Validate make docker-push against the real registry",
+          "description": "Run `make docker-push-user-service` (or an equivalent target) with real `.env` GCP values and confirm the image lands in the registry."
+        },
+        {
+          "summary": "Validate docker compose pull from Artifact Registry",
+          "description": "Run `docker compose up` against the populated `.env` and confirm the backend service image is pulled from the real Artifact Registry repository."
+        },
+        {
+          "summary": "Document the bootstrap sequence",
+          "description": "Update <docs/build-and-deploy.md> with the order of operations — run `bootstrap-project.sh`, init Terraform, apply artifact-registry module, validate push/pull — for future environment setups."
+        }
+      ]
+    }
+  ]
+}
