@@ -1,0 +1,328 @@
+{
+  "summary": "Phase 6: Atlassian/Jira Provisioning",
+  "description": "Implement real Atlassian/Jira group provisioning in provisioning-service and stand up the identity correlation step described in <docs/design-spec.md>. Today, ProvisioningEventService.handleAtlassianProvisioningRequested in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/service/ProvisioningEventService.java> is a Phase 4 stub: it hardcodes ResultState.SUCCESS and always publishes AtlassianProvisioningCompletedV1 with success=true and null errorCode/errorMessage, without calling Atlassian. Separately, IdentityCorrelationRequestedV1 is published by onboarding-service onto edu.identity.correlation.v1 but is silently ignored by ProvisioningCompletedConsumer (no producer of IdentityCorrelationCompletedV1/IdentityCorrelationFailedV1 exists), leaving the IDENTITY_CORRELATION onboarding step stuck in PROCESSING indefinitely. This epic adds a RestClient-based Atlassian Cloud adapter for group membership, wires it into the audit log and outbox per the existing GitHub pattern from Phase 5, implements the email-based identity correlation flow (new internal user-service API + onboarding-service Feign client + Kafka consumer), and extends the provider health endpoint. Phase 6 exit criteria: users can be provisioned into configured Atlassian groups, identity correlation outcomes are persisted to identity_link, and failed provisioning is visible in audit logs and can be retried via the existing POST /api/v1/onboarding/{requestId}/retry endpoint.",
+  "labels": ["atlassian", "jira", "provisioning", "phase-6", "backend", "kafka", "outbox", "identity-correlation"],
+  "priority": "High",
+  "userType": "new user",
+  "functionality": "be automatically provisioned into the correct Atlassian/Jira group and have their GitHub identity correlated with their Atlassian identity as part of the onboarding workflow",
+  "benefit": "so that Jira access is granted asynchronously and GitHub development activity is attributed correctly in Jira without manual administrator intervention",
+  "stories": [
+    {
+      "summary": "Configure Atlassian Cloud REST API client with Basic Auth",
+      "description": "Configure a Spring RestClient bean in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/config/AppConfig.java> for Atlassian Cloud REST API v3 calls, mirroring the GitHub RestClient setup from Phase 5. Atlassian Cloud authenticates via HTTP Basic Auth using an account email and API token. Add an AtlassianClientProperties @ConfigurationProperties class in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/config/properties/AtlassianClientProperties.java> binding atlassian.api.base-url, atlassian.api.email, and atlassian.api.token. Add these properties to <backend/provisioning-service/src/main/resources/application.yaml> alongside the existing github.api.* block, with placeholder values compatible with GCP Secret Manager environment variable injection.",
+      "labels": ["atlassian", "http-client", "config", "phase-6", "provisioning-service"],
+      "priority": "High",
+      "storyPoints": 3,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Atlassian RestClient bean is available in application context",
+          "given": "provisioning-service starts with atlassian.api.base-url, atlassian.api.email, and atlassian.api.token configured",
+          "when": "the application context loads",
+          "then": "a RestClient bean named atlassianRestClient is available, configured with base URL atlassian.api.base-url and a default Authorization header containing the Base64-encoded email:token Basic credential"
+        },
+        {
+          "scenario": "Missing token causes startup failure",
+          "given": "atlassian.api.token is absent or blank in the environment",
+          "when": "the application starts",
+          "then": "startup fails with a clear ConfigurationPropertiesBindException identifying the missing property"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add AtlassianClientProperties @ConfigurationProperties class",
+          "description": "Create <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/config/properties/AtlassianClientProperties.java> binding prefix atlassian.api with fields baseUrl, email, and token. Annotate with @ConfigurationProperties and @Validated with @NotBlank on all three fields, following the structure of <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/config/properties/GithubClientProperties.java>."
+        },
+        {
+          "summary": "Register atlassianRestClient bean in AppConfig",
+          "description": "Add AtlassianClientProperties to the @EnableConfigurationProperties list and a RestClient @Bean named atlassianRestClient in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/config/AppConfig.java>. Configure it with AtlassianClientProperties.baseUrl as the base URL and a default Authorization header set to Basic plus the Base64-encoded email:token string. Accept and return application/json."
+        },
+        {
+          "summary": "Add Atlassian properties to application.yaml and provisioning-service .env.example",
+          "description": "Add atlassian.api.base-url, atlassian.api.email: ${ATLASSIAN_API_EMAIL}, and atlassian.api.token: ${ATLASSIAN_API_TOKEN} to <backend/provisioning-service/src/main/resources/application.yaml>. Add ATLASSIAN_API_BASE_URL, ATLASSIAN_API_EMAIL, and ATLASSIAN_API_TOKEN with empty placeholder values to <backend/provisioning-service/.env.example>."
+        }
+      ]
+    },
+    {
+      "summary": "Implement Atlassian group membership adapter",
+      "description": "Create AtlassianProvisioningAdapter in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/atlassian/AtlassianProvisioningAdapter.java> using atlassianRestClient. When AtlassianProvisioningRequestedV1.atlassianIdentityId is present, use it directly as the Jira accountId; otherwise resolve the account via GET /rest/api/3/user/search?query={atlassianEmail} and take the first result's accountId. Add the resolved account to the group via POST /rest/api/3/group/user?groupName={groupName} with a JSON body containing accountId. Map outcomes to an AtlassianGroupMembershipResult value object: HTTP 201 maps to membershipState ACTIVE with success true; HTTP 400 with an already-a-member error message also maps to membershipState ACTIVE with success true (idempotent retries); HTTP 404 maps to membershipState FAILED with errorCode GROUP_OR_USER_NOT_FOUND; an unresolved account maps to membershipState FAILED with errorCode ACCOUNT_NOT_FOUND without calling the group endpoint; HTTP 429 with a Retry-After header throws AtlassianRateLimitException so the Kafka error handler can reprocess the message later.",
+      "labels": ["atlassian", "adapter", "phase-6", "provisioning-service"],
+      "priority": "High",
+      "storyPoints": 8,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Successful group membership returns ACTIVE state",
+          "given": "GET /rest/api/3/user/search returns one matching account and POST /rest/api/3/group/user responds 201",
+          "when": "AtlassianProvisioningAdapter.addGroupMember is called with an atlassianEmail and groupName",
+          "then": "AtlassianGroupMembershipResult has membershipState ACTIVE, success true, and null errorCode"
+        },
+        {
+          "scenario": "Already-member response is treated as success",
+          "given": "POST /rest/api/3/group/user responds 400 with an error message indicating the user is already a member of the group",
+          "when": "AtlassianProvisioningAdapter.addGroupMember is called",
+          "then": "AtlassianGroupMembershipResult has membershipState ACTIVE, success true, and null errorCode"
+        },
+        {
+          "scenario": "Group or user not found returns FAILED with error code",
+          "given": "POST /rest/api/3/group/user responds 404",
+          "when": "AtlassianProvisioningAdapter.addGroupMember is called",
+          "then": "AtlassianGroupMembershipResult has membershipState FAILED, success false, and errorCode GROUP_OR_USER_NOT_FOUND"
+        },
+        {
+          "scenario": "No matching Atlassian account returns FAILED with ACCOUNT_NOT_FOUND",
+          "given": "GET /rest/api/3/user/search returns an empty result for the supplied atlassianEmail and atlassianIdentityId is null",
+          "when": "AtlassianProvisioningAdapter.addGroupMember is called",
+          "then": "AtlassianGroupMembershipResult has membershipState FAILED, success false, and errorCode ACCOUNT_NOT_FOUND, and no group membership call is made"
+        },
+        {
+          "scenario": "Rate limit throws retryable exception",
+          "given": "POST /rest/api/3/group/user responds 429 with a Retry-After header",
+          "when": "AtlassianProvisioningAdapter.addGroupMember is called",
+          "then": "an AtlassianRateLimitException is thrown containing the retry-after value so the Kafka listener can reprocess the message"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Create AtlassianGroupMembershipResult value object",
+          "description": "Create <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/atlassian/AtlassianGroupMembershipResult.java> as a Java record with fields: String membershipState, boolean success, String errorCode, String errorMessage, String accountId."
+        },
+        {
+          "summary": "Create AtlassianRateLimitException",
+          "description": "Create <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/atlassian/AtlassianRateLimitException.java> extending RuntimeException, mirroring <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/github/GithubRateLimitException.java>. Include the Retry-After value in seconds as a constructor field so callers can log the delay."
+        },
+        {
+          "summary": "Implement account resolution by email",
+          "description": "In AtlassianProvisioningAdapter, add a private resolveAccountId(String email) method that calls GET /rest/api/3/user/search?query={email} via atlassianRestClient and returns the accountId of the first array element, or empty if the response array is empty or email is null."
+        },
+        {
+          "summary": "Implement AtlassianProvisioningAdapter.addGroupMember",
+          "description": "Implement addGroupMember(String atlassianIdentityId, String atlassianEmail, String groupName) in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/atlassian/AtlassianProvisioningAdapter.java>. Use atlassianIdentityId directly as accountId if present, otherwise resolve via resolveAccountId(atlassianEmail); return ACCOUNT_NOT_FOUND if neither resolves. Call atlassianRestClient.post().uri(\"/rest/api/3/group/user?groupName={groupName}\", groupName) with a JSON body containing accountId. Map the response status per the defined rules into AtlassianGroupMembershipResult, inspecting the response body for the 400 already-member case."
+        }
+      ]
+    },
+    {
+      "summary": "Wire Atlassian adapter into provisioning audit log and outbox",
+      "description": "Replace the Phase 4 stub in ProvisioningEventService.handleAtlassianProvisioningRequested in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/service/ProvisioningEventService.java>, which currently hardcodes auditLog.resultState to ResultState.SUCCESS and buildAtlassianCompletionPayload always sets success=true with null errorCode/errorMessage. Inject AtlassianProvisioningAdapter and call addGroupMember(event.getAtlassianIdentityId(), event.getAtlassianEmail(), event.getGroupName()). Persist the real AtlassianGroupMembershipResult as ProvisioningAuditLog.responsePayload, mapping membershipState to ResultState (ACTIVE -> SUCCESS, FAILED -> FAILURE). Replace buildAtlassianCompletionPayload's raw map builder with an Avro-typed AtlassianProvisioningCompletedV1 record from backend/common populated from the adapter result, serialized via the existing toOutboxPayload(SpecificRecord) helper, and persisted in the same @Transactional block as the audit log write per the outbox pattern in <docs/design-spec.md>.",
+      "labels": ["audit-log", "kafka", "outbox", "avro", "phase-6", "provisioning-service"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Successful provisioning recorded with SUCCESS result state",
+          "given": "AtlassianProvisioningAdapter.addGroupMember returns membershipState ACTIVE and success true",
+          "when": "handleAtlassianProvisioningRequested completes",
+          "then": "the provisioning_audit_log row has resultState SUCCESS and a non-null responsePayload containing membershipState ACTIVE"
+        },
+        {
+          "scenario": "Outbox entry published with real success flag",
+          "given": "AtlassianProvisioningAdapter.addGroupMember returns membershipState ACTIVE and success true",
+          "when": "handleAtlassianProvisioningRequested completes",
+          "then": "an outbox_event row exists with eventType AtlassianProvisioningCompletedV1, topic edu.provisioning.atlassian.v1, and success true in the payload"
+        },
+        {
+          "scenario": "Failed provisioning stored with error detail and propagated to outbox",
+          "given": "AtlassianProvisioningAdapter.addGroupMember returns membershipState FAILED, success false, errorCode ACCOUNT_NOT_FOUND",
+          "when": "handleAtlassianProvisioningRequested completes",
+          "then": "the provisioning_audit_log row has resultState FAILURE and the outbox_event row has success false and errorCode ACCOUNT_NOT_FOUND in the payload"
+        },
+        {
+          "scenario": "Audit log and outbox write are atomic",
+          "given": "an exception occurs after the audit log is written but before the outbox save",
+          "when": "the transaction rolls back",
+          "then": "neither the audit log row nor the outbox row is persisted"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Inject AtlassianProvisioningAdapter and call it from handleAtlassianProvisioningRequested",
+          "description": "Add AtlassianProvisioningAdapter as a constructor dependency of ProvisioningEventService in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/service/ProvisioningEventService.java>. In handleAtlassianProvisioningRequested, call adapter.addGroupMember(event.getAtlassianIdentityId(), event.getAtlassianEmail(), event.getGroupName()) before constructing the audit log and outbox entries."
+        },
+        {
+          "summary": "Persist real response payload and ResultState for Atlassian audit log",
+          "description": "Add a buildAtlassianResponsePayload(AtlassianGroupMembershipResult) helper that serializes the result to JSON via objectMapper, mirroring buildGithubResponsePayload. Set auditLog.responsePayload from this helper and auditLog.resultState by mapping AtlassianGroupMembershipResult.membershipState (ACTIVE -> SUCCESS, FAILED -> FAILURE)."
+        },
+        {
+          "summary": "Build Avro-typed AtlassianProvisioningCompletedV1 from adapter result",
+          "description": "Replace buildAtlassianCompletionPayload with a new buildAtlassianCompletedEvent(AtlassianProvisioningRequestedV1, AtlassianGroupMembershipResult) method that constructs an AtlassianProvisioningCompletedV1 Avro record from the generated class in backend/common. Populate eventId (new UUID), occurredAt, correlationId, producer=provisioning-service, userId, onboardingRequestId, providerTargetId, success, errorCode, and errorMessage from the adapter result. Serialize via the existing toOutboxPayload(SpecificRecord) helper and set OutboxEvent.payload from it."
+        }
+      ]
+    },
+    {
+      "summary": "User-service internal API for Atlassian identity lookup and identity-link persistence",
+      "description": "Expose two endpoints under /api/v1/internal in user-service for onboarding-service's identity correlation step: GET /api/v1/internal/external-identities?provider=ATLASSIAN&email={email} returning the existing AtlassianIdentitySummary record at <backend/user-service/src/main/java/xyz/catuns/onboarding/user/api/dto/AtlassianIdentitySummary.java> for the matching ExternalIdentity, or 404 if none found; and POST /api/v1/internal/identity-links to persist an IdentityLink row given userProfileId, githubIdentityId, atlassianIdentityId, matchStrategy, and confidenceScore per <docs/schemas/normalized-database-schema.md>. Protect both endpoints with a new InternalApiAuthFilter in user-service mirroring <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/filter/InternalApiAuthFilter.java>, expecting caller=onboarding-service and audience=user-service, and add a ServiceTokenProvider bean to user-service's JWT configuration if not already present.",
+      "labels": ["user-service", "identity-correlation", "internal-api", "phase-6"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Atlassian identity found by email",
+          "given": "an external_identity row exists with provider ATLASSIAN and email matching the query",
+          "when": "GET /api/v1/internal/external-identities?provider=ATLASSIAN&email={email} is called with a valid onboarding-service service token",
+          "then": "the response is 200 with an AtlassianIdentitySummary containing the matching accountId and email"
+        },
+        {
+          "scenario": "No matching Atlassian identity returns 404",
+          "given": "no external_identity row exists with provider ATLASSIAN and the queried email",
+          "when": "GET /api/v1/internal/external-identities?provider=ATLASSIAN&email={email} is called",
+          "then": "the response is 404"
+        },
+        {
+          "scenario": "Identity link persisted successfully",
+          "given": "a valid userProfileId, githubIdentityId, atlassianIdentityId, matchStrategy, and confidenceScore are posted",
+          "when": "POST /api/v1/internal/identity-links is called with a valid onboarding-service service token",
+          "then": "the response is 201 and an identity_link row is persisted with the supplied fields and a non-null createdAt"
+        },
+        {
+          "scenario": "Calls without a valid service token are rejected",
+          "given": "a request to /api/v1/internal/external-identities omits the Authorization header or presents a token not issued for caller onboarding-service and audience user-service",
+          "when": "the request is processed",
+          "then": "the response is 401 Unauthorized"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add findByProvider_ProviderKeyAndEmail query method",
+          "description": "Add Optional<ExternalIdentity> findByProvider_ProviderKeyAndEmail(ProviderKey providerKey, String email) to <backend/user-service/src/main/java/xyz/catuns/onboarding/user/repository/ExternalIdentityRepository.java>."
+        },
+        {
+          "summary": "Add InternalIdentityController with external-identity lookup and identity-link creation",
+          "description": "Create <backend/user-service/src/main/java/xyz/catuns/onboarding/user/api/InternalIdentityController.java> with @RequestMapping(\"/api/v1/internal\"). Add GET /external-identities returning AtlassianIdentitySummary (200) or 404, and POST /identity-links accepting an IdentityLinkCreateRequest DTO and returning 201. Create the IdentityLinkCreateRequest record in <backend/user-service/src/main/java/xyz/catuns/onboarding/user/api/dto/IdentityLinkCreateRequest.java> with fields userProfileId, githubIdentityId, atlassianIdentityId, matchStrategy, confidenceScore."
+        },
+        {
+          "summary": "Add InternalApiAuthFilter and ServiceTokenProvider bean to user-service",
+          "description": "Create <backend/user-service/src/main/java/xyz/catuns/onboarding/user/filter/InternalApiAuthFilter.java> mirroring the onboarding-service implementation, expecting EXPECTED_CALLER=onboarding-service and EXPECTED_AUDIENCE=user-service. Add a ServiceTokenProvider @Bean to user-service's JWT configuration class if one is not already registered."
+        },
+        {
+          "summary": "Implement identity-link persistence service method",
+          "description": "Add a method that maps IdentityLinkCreateRequest to a new IdentityLink entity, resolves the referenced UserProfile and ExternalIdentity entities by id via their repositories, sets matchStrategy and confidenceScore, and saves it via IdentityLinkRepository. Wire this method into InternalIdentityController's POST /identity-links handler."
+        }
+      ]
+    },
+    {
+      "summary": "Onboarding-service identity correlation consumer and Atlassian provisioning enrichment",
+      "description": "Implement the Identity Service role described in <docs/design-spec.md> inside onboarding-service. Add an IdentityCorrelationRequestedV1 handler alongside the existing listener in <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/kafka/ProvisioningCompletedConsumer.java> (currently this event type is silently ignored on edu.identity.correlation.v1). Add IdentityCorrelationService that calls a new user-service internal endpoint via OpenFeign (onboarding-service does not yet depend on spring-cloud-starter-openfeign) to look up an Atlassian identity by the GitHub user's primaryEmail. On a match, persist an identity_link via the user-service internal API with matchStrategy EMAIL_EXACT and confidenceScore 1.00, then write an IdentityCorrelationCompletedV1 outbox event with matched=true and the resolved atlassianIdentityId. On no match, write an IdentityCorrelationFailedV1 outbox event with reasonCode NO_MATCHING_ATLASSIAN_IDENTITY. Also update buildAtlassianOutbox in <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/service/OnboardingEventService.java> to populate AtlassianProvisioningRequestedV1.atlassianEmail from UserRegisteredV1.primaryEmail (currently hardcoded null), so the Phase 6 Atlassian adapter can resolve an account before correlation completes.",
+      "labels": ["onboarding-service", "identity-correlation", "kafka", "feign", "phase-6"],
+      "priority": "High",
+      "storyPoints": 8,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Matching Atlassian identity completes correlation",
+          "given": "an IdentityCorrelationRequestedV1 event arrives with primaryEmail matching an Atlassian external_identity in user-service",
+          "when": "the identity correlation handler processes the event",
+          "then": "an identity_link row is created via the user-service internal API and an IdentityCorrelationCompletedV1 outbox event is written with matched=true, matchStrategy EMAIL_EXACT, and the resolved atlassianIdentityId"
+        },
+        {
+          "scenario": "No matching Atlassian identity fails correlation",
+          "given": "an IdentityCorrelationRequestedV1 event arrives with primaryEmail that has no matching Atlassian external_identity",
+          "when": "the identity correlation handler processes the event",
+          "then": "an IdentityCorrelationFailedV1 outbox event is written with reasonCode NO_MATCHING_ATLASSIAN_IDENTITY and no identity_link row is created"
+        },
+        {
+          "scenario": "IDENTITY_CORRELATION step transitions to a terminal state",
+          "given": "either IdentityCorrelationCompletedV1 or IdentityCorrelationFailedV1 is published for an onboarding request",
+          "when": "ProvisioningCompletedConsumer.consumeIdentityCorrelation processes the event",
+          "then": "the onboarding_step row for IDENTITY_CORRELATION transitions to SUCCEEDED or FAILED respectively, using the existing handleIdentityCorrelationCompleted/Failed methods on OnboardingEventService"
+        },
+        {
+          "scenario": "Atlassian provisioning request carries the user's email",
+          "given": "a UserRegisteredV1 event with a non-null primaryEmail dispatches the JIRA_GROUP_PROVISIONING step",
+          "when": "buildAtlassianOutbox constructs the AtlassianProvisioningRequestedV1 payload",
+          "then": "the payload's atlassianEmail field equals the user's primaryEmail instead of null"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add spring-cloud-starter-openfeign dependency and @EnableFeignClients",
+          "description": "Add the spring-cloud-starter-openfeign dependency to <backend/onboarding-service/pom.xml> (version managed by the existing spring-cloud-dependencies BOM) and add @EnableFeignClients to <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/OnboardingServiceApplication.java>."
+        },
+        {
+          "summary": "Create UserServiceFeignClient and auth interceptor",
+          "description": "Create a UserServiceFeignClient interface in <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/client/UserServiceFeignClient.java> with @FeignClient(name = \"${app.feign.clients.user}\", path = \"/api/v1/internal\") declaring methods for getAtlassianIdentityByEmail(String email) and createIdentityLink(IdentityLinkCreateRequest). Add a FeignServiceAuthInterceptor mirroring <backend/user-service/src/main/java/xyz/catuns/onboarding/user/client/FeignServiceAuthInterceptor.java> with ServicePrincipal(\"onboarding-service\", \"user-service\"). Add app.feign.clients.user: user-service to <backend/onboarding-service/src/main/resources/application.yaml>."
+        },
+        {
+          "summary": "Implement identity correlation consumer and service",
+          "description": "Add handling for IdentityCorrelationRequestedV1 in <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/kafka/ProvisioningCompletedConsumer.java> (or a new dedicated handler on the same topic). Create IdentityCorrelationService in <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/service/IdentityCorrelationService.java> that calls UserServiceFeignClient.getAtlassianIdentityByEmail(event.getPrimaryEmail()), and on a match calls createIdentityLink with matchStrategy EMAIL_EXACT and confidenceScore 1.00, saving an IdentityCorrelationCompletedV1 outbox event; on no match (null email or 404 response), saves an IdentityCorrelationFailedV1 outbox event with reasonCode NO_MATCHING_ATLASSIAN_IDENTITY."
+        },
+        {
+          "summary": "Add buildIdentityCorrelationCompleted and buildIdentityCorrelationFailed payload builders",
+          "description": "Add buildIdentityCorrelationCompleted(...) and buildIdentityCorrelationFailed(...) methods to <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/outbox/payload/OutboxPayloadBuilderService.java>, matching the IdentityCorrelationCompletedV1 and IdentityCorrelationFailedV1 Avro schemas in <docs/schemas/kafka-event-schema.md>."
+        },
+        {
+          "summary": "Populate atlassianEmail in buildAtlassianOutbox",
+          "description": "In <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/service/OnboardingEventService.java>, change buildAtlassianOutbox to pass event.getPrimaryEmail() instead of null as the atlassianEmail argument to payloadBuilder.buildAtlassianProvisioningRequested."
+        }
+      ]
+    },
+    {
+      "summary": "Atlassian provider health endpoint",
+      "description": "Extend GET /api/v1/admin/provider-health to include Atlassian alongside the existing GitHub check from Phase 5. Add AtlassianHealthChecker in <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/atlassian/AtlassianHealthChecker.java> that calls GET /rest/api/3/myself using the configured atlassianRestClient — a 200 response indicates status UP, any non-2xx or connection error indicates DOWN. Inject AtlassianHealthChecker into <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/controller/ProviderHealthController.java> and return both the GitHub and Atlassian checks in the response array, reusing the existing ProviderHealthResponse DTO at <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/dto/ProviderHealthResponse.java>.",
+      "labels": ["admin", "health", "phase-6", "provisioning-service", "rest"],
+      "priority": "Medium",
+      "storyPoints": 2,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Atlassian reachable returns UP status",
+          "given": "an admin-authenticated request is made to GET /api/v1/admin/provider-health and the Atlassian API is reachable",
+          "when": "the request is processed",
+          "then": "the response is 200 with a JSON array containing entries for both github and atlassian, with atlassian status UP and a non-negative latencyMs"
+        },
+        {
+          "scenario": "Atlassian unreachable returns DOWN status without 5xx",
+          "given": "the Atlassian API is unreachable or returns a non-2xx status",
+          "when": "GET /api/v1/admin/provider-health is called",
+          "then": "the response is 200 with provider atlassian and status DOWN; the endpoint itself does not return 5xx"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Implement AtlassianHealthChecker",
+          "description": "Create <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/atlassian/AtlassianHealthChecker.java> mirroring <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/github/GithubHealthChecker.java>. Call GET /rest/api/3/myself via atlassianRestClient, measure latency with System.currentTimeMillis(), and return ProviderHealthResponse(\"ATLASSIAN\", \"UP\"/\"DOWN\", latencyMs, checkedAt). Do not let exceptions propagate out of the checker."
+        },
+        {
+          "summary": "Wire AtlassianHealthChecker into ProviderHealthController",
+          "description": "Inject AtlassianHealthChecker into <backend/provisioning-service/src/main/java/xyz/catuns/onboarding/provisioning/controller/ProviderHealthController.java> and return List.of(githubHealthChecker.check(), atlassianHealthChecker.check()) from getProviderHealth()."
+        }
+      ]
+    },
+    {
+      "summary": "Unit and integration tests for Atlassian provisioning and identity correlation",
+      "description": "Add unit tests and WireMock-backed integration tests covering the new Phase 6 flows. Unit-test AtlassianProvisioningAdapter with a mocked RestClient covering active, already-a-member, 404, and 429 rate-limit paths in <backend/provisioning-service/src/test/java/xyz/catuns/onboarding/provisioning/atlassian/AtlassianProvisioningAdapterTest.java>, following the structure of <backend/provisioning-service/src/test/java/xyz/catuns/onboarding/provisioning/github/GithubProvisioningAdapterTest.java>. Add a WireMock + TestContainers integration test in <backend/provisioning-service/src/test/java/xyz/catuns/onboarding/provisioning/integration/AtlassianProvisioningIntegrationTest.java> exercising the full consumer-to-outbox flow, mirroring <backend/provisioning-service/src/test/java/xyz/catuns/onboarding/provisioning/integration/GithubProvisioningIntegrationTest.java>. Add unit tests for IdentityCorrelationService in <backend/onboarding-service/src/test/java/xyz/catuns/onboarding/service/service/IdentityCorrelationServiceTest.java> covering matched and unmatched correlation outcomes with a mocked UserServiceFeignClient.",
+      "labels": ["testing", "wiremock", "phase-6", "provisioning-service", "onboarding-service", "integration-test"],
+      "priority": "Medium",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Unit tests cover all Atlassian membership outcome paths",
+          "given": "AtlassianProvisioningAdapterTest runs with a mocked RestClient",
+          "when": "tests for 201 created, 400 already-a-member, 404 not found, and 429 with Retry-After are executed",
+          "then": "all four tests pass and each asserts the correct AtlassianGroupMembershipResult fields"
+        },
+        {
+          "scenario": "Integration test verifies full Atlassian provisioning flow",
+          "given": "WireMock stubs GET /rest/api/3/user/search to return one account and POST /rest/api/3/group/user to return 201, and TestContainers Kafka is running",
+          "when": "an AtlassianProvisioningRequestedV1 message is published to edu.provisioning.atlassian.v1",
+          "then": "a provisioning_audit_log row and an outbox_event row with membershipState ACTIVE and success true are persisted within the test assertion timeout"
+        },
+        {
+          "scenario": "Identity correlation unit tests cover matched and unmatched outcomes",
+          "given": "IdentityCorrelationServiceTest mocks UserServiceFeignClient to return an AtlassianIdentitySummary in one test and a not-found response in another",
+          "when": "IdentityCorrelationService processes an IdentityCorrelationRequestedV1 event in each case",
+          "then": "the matched case produces an IdentityCorrelationCompletedV1 outbox payload with matched=true and the unmatched case produces an IdentityCorrelationFailedV1 outbox payload with reasonCode NO_MATCHING_ATLASSIAN_IDENTITY"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Write AtlassianProvisioningAdapterTest unit tests",
+          "description": "Create <backend/provisioning-service/src/test/java/xyz/catuns/onboarding/provisioning/atlassian/AtlassianProvisioningAdapterTest.java>. Use Mockito to stub RestClient call chains for: 201 created, 400 already-a-member, 404 not found, and 429 rate-limit with Retry-After header. Assert membershipState, success, and errorCode on the returned AtlassianGroupMembershipResult for each case."
+        },
+        {
+          "summary": "Write AtlassianProvisioningIntegrationTest with WireMock and TestContainers",
+          "description": "Create <backend/provisioning-service/src/test/java/xyz/catuns/onboarding/provisioning/integration/AtlassianProvisioningIntegrationTest.java> extending the existing TestcontainersConfiguration. Start WireMockServer in @BeforeAll and stub GET /rest/api/3/user/search and POST /rest/api/3/group/user. Publish an AtlassianProvisioningRequestedV1 event to edu.provisioning.atlassian.v1. Poll provisioning_audit_log and outbox_event using Awaitility and assert both rows exist with the expected membershipState and success values."
+        },
+        {
+          "summary": "Write IdentityCorrelationServiceTest unit tests",
+          "description": "Create <backend/onboarding-service/src/test/java/xyz/catuns/onboarding/service/service/IdentityCorrelationServiceTest.java>. Mock UserServiceFeignClient.getAtlassianIdentityByEmail to return a present AtlassianIdentitySummary in one test and a not-found response in another. Assert the resulting outbox payload's eventType and key fields (matched, matchStrategy, atlassianIdentityId for the matched case; reasonCode for the unmatched case)."
+        }
+      ]
+    }
+  ]
+}
