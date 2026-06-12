@@ -14,4 +14,6 @@ public interface ExternalIdentityRepository extends JpaRepository<ExternalIdenti
     List<ExternalIdentity> findByUserProfile_Id(UUID userProfileId);
 
     Optional<ExternalIdentity> findByProvider_ProviderKeyAndUserProfile_Id(ProviderKey providerKey, UUID userProfileId);
+
+    Optional<ExternalIdentity> findByProvider_ProviderKeyAndEmail(ProviderKey providerKey, String email);
 }

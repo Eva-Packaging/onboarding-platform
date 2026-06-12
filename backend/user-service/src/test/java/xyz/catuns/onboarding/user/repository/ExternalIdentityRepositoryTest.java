@@ -114,6 +114,32 @@ class ExternalIdentityRepositoryTest {
     }
 
     @Test
+    void findByProviderKeyAndEmail_returnsMatch() {
+        ExternalProvider atlassianProvider = providerRepository.save(buildProvider(ProviderKey.ATLASSIAN, "Atlassian"));
+
+        ExternalIdentity atlassianIdentity = new ExternalIdentity();
+        atlassianIdentity.setUserProfile(userProfile);
+        atlassianIdentity.setProvider(atlassianProvider);
+        atlassianIdentity.setExternalUserId("atl-account-001");
+        atlassianIdentity.setEmail("findme@example.com");
+        identityRepository.save(atlassianIdentity);
+
+        Optional<ExternalIdentity> found = identityRepository
+            .findByProvider_ProviderKeyAndEmail(ProviderKey.ATLASSIAN, "findme@example.com");
+
+        assertThat(found).isPresent();
+        assertThat(found.get().getExternalUserId()).isEqualTo("atl-account-001");
+    }
+
+    @Test
+    void findByProviderKeyAndEmail_returnsEmptyForMismatch() {
+        Optional<ExternalIdentity> found = identityRepository
+            .findByProvider_ProviderKeyAndEmail(ProviderKey.ATLASSIAN, "missing@example.com");
+
+        assertThat(found).isEmpty();
+    }
+
+    @Test
     void uniqueConstraint_rejectsDuplicateProviderAndExternalUserId() {
         identityRepository.saveAndFlush(buildIdentity("gh-dup", "dupuser"));
 
