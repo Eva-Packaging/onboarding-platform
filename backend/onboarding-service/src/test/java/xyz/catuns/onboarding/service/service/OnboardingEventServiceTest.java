@@ -1,5 +1,7 @@
 package xyz.catuns.onboarding.service.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -51,6 +53,7 @@ class OnboardingEventServiceTest {
     @Autowired private OutboxEventRepository outboxRepo;
     @Autowired private ProviderTargetRepository providerTargetRepository;
     @Autowired private GroupMappingRuleRepository groupMappingRuleRepository;
+    @Autowired private ObjectMapper objectMapper;
 
     // Prevent the @Scheduled publisher from firing and attempting KafkaAvroSerializer
     // (Schema Registry is not available in the test environment)
@@ -260,6 +263,24 @@ class OnboardingEventServiceTest {
         assertTopic(rows, "IdentityCorrelationRequestedV1", "edu.identity.correlation.v1");
         assertTopic(rows, "GithubProvisioningRequestedV1", "edu.provisioning.github.v1");
         assertTopic(rows, "AtlassianProvisioningRequestedV1", "edu.provisioning.atlassian.v1");
+    }
+
+    @Test
+    @Transactional
+    void handleUserRegistered_atlassianProvisioningRequested_populatesAtlassianEmailFromPrimaryEmail() throws Exception {
+        createProviderTargets();
+        String userId = UUID.randomUUID().toString();
+        UUID requestId = createRequest(userId).requestId();
+
+        eventService.handleUserRegistered(userRegisteredEvent(userId, requestId.toString()));
+
+        OutboxEvent atlassianOutbox = outboxRepo.findByPublishedFalseOrderByCreatedAtAsc().stream()
+                .filter(e -> "AtlassianProvisioningRequestedV1".equals(e.getEventType()))
+                .findFirst()
+                .orElseThrow();
+
+        JsonNode payload = objectMapper.readTree(atlassianOutbox.getPayload());
+        assertThat(payload.get("atlassianEmail").asText()).isEqualTo("test@example.com");
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────

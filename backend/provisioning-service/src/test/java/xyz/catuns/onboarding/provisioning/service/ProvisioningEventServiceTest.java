@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 import xyz.catuns.onboarding.common.events.AtlassianProvisioningRequestedV1;
 import xyz.catuns.onboarding.common.events.GithubProvisioningRequestedV1;
 import xyz.catuns.onboarding.provisioning.TestcontainersConfiguration;
+import xyz.catuns.onboarding.provisioning.atlassian.AtlassianGroupMembershipResult;
+import xyz.catuns.onboarding.provisioning.atlassian.AtlassianProvisioningAdapter;
 import xyz.catuns.onboarding.provisioning.domain.OutboxEvent;
 import xyz.catuns.onboarding.provisioning.domain.ProvisioningAuditLog;
 import xyz.catuns.onboarding.provisioning.domain.ResultState;
@@ -44,11 +46,14 @@ class ProvisioningEventServiceTest {
 
     @MockBean private OutboxEventPublisher outboxEventPublisher;
     @MockBean private GithubProvisioningAdapter githubAdapter;
+    @MockBean private AtlassianProvisioningAdapter atlassianAdapter;
 
     @BeforeEach
     void setUp() {
         when(githubAdapter.addTeamMember(any(), any(), any()))
                 .thenReturn(new GithubMembershipResult("ACTIVE", true, null, null));
+        when(atlassianAdapter.addGroupMember(any(), any(), any()))
+                .thenReturn(new AtlassianGroupMembershipResult("ACTIVE", true, null, null, "account-123"));
     }
 
     // ── GithubProvisioningRequestedV1 ────────────────────────────────────────────
@@ -202,6 +207,56 @@ class ProvisioningEventServiceTest {
         OutboxEvent outbox = outboxEventRepository.findByPublishedFalseOrderByCreatedAtAsc().getFirst();
         assertThat(outbox.getPayload())
                 .contains("\"success\":true")
+                .contains("\"eventType\":\"AtlassianProvisioningCompletedV1\"");
+    }
+
+    // ── Audit log and outbox enrichment (story 3) ──────────────────────────────
+
+    @Test
+    @Transactional
+    void handleAtlassianProvisioningRequested_activeResult_auditLogHasResponsePayloadAndSuccessState() {
+        when(atlassianAdapter.addGroupMember(any(), any(), any()))
+                .thenReturn(new AtlassianGroupMembershipResult("ACTIVE", true, null, null, "account-123"));
+
+        eventService.handleAtlassianProvisioningRequested(atlassianRequestedEvent());
+
+        ProvisioningAuditLog log = auditLogRepository.findAll().getFirst();
+        assertThat(log.getResultState()).isEqualTo(ResultState.SUCCESS);
+        assertThat(log.getResponsePayload())
+                .isNotNull()
+                .contains("\"membershipState\":\"ACTIVE\"")
+                .contains("\"success\":true");
+    }
+
+    @Test
+    @Transactional
+    void handleAtlassianProvisioningRequested_failedResult_auditLogHasFailureStateAndErrorCode() {
+        when(atlassianAdapter.addGroupMember(any(), any(), any()))
+                .thenReturn(new AtlassianGroupMembershipResult("FAILED", false, "ACCOUNT_NOT_FOUND", "No Atlassian account found", null));
+
+        eventService.handleAtlassianProvisioningRequested(atlassianRequestedEvent());
+
+        ProvisioningAuditLog log = auditLogRepository.findAll().getFirst();
+        assertThat(log.getResultState()).isEqualTo(ResultState.FAILURE);
+        assertThat(log.getResponsePayload())
+                .isNotNull()
+                .contains("\"membershipState\":\"FAILED\"")
+                .contains("\"success\":false")
+                .contains("ACCOUNT_NOT_FOUND");
+    }
+
+    @Test
+    @Transactional
+    void handleAtlassianProvisioningRequested_failedResult_outboxPayloadHasSuccessFalseAndErrorCode() {
+        when(atlassianAdapter.addGroupMember(any(), any(), any()))
+                .thenReturn(new AtlassianGroupMembershipResult("FAILED", false, "ACCOUNT_NOT_FOUND", "No Atlassian account found", null));
+
+        eventService.handleAtlassianProvisioningRequested(atlassianRequestedEvent());
+
+        OutboxEvent outbox = outboxEventRepository.findByPublishedFalseOrderByCreatedAtAsc().getFirst();
+        assertThat(outbox.getPayload())
+                .contains("\"success\":false")
+                .contains("\"errorCode\":\"ACCOUNT_NOT_FOUND\"")
                 .contains("\"eventType\":\"AtlassianProvisioningCompletedV1\"");
     }
 

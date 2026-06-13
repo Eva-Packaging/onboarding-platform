@@ -9,9 +9,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import xyz.catuns.onboarding.common.events.AtlassianProvisioningCompletedV1;
 import xyz.catuns.onboarding.common.events.AtlassianProvisioningRequestedV1;
 import xyz.catuns.onboarding.common.events.GithubProvisioningCompletedV1;
 import xyz.catuns.onboarding.common.events.GithubProvisioningRequestedV1;
+import xyz.catuns.onboarding.provisioning.atlassian.AtlassianGroupMembershipResult;
+import xyz.catuns.onboarding.provisioning.atlassian.AtlassianProvisioningAdapter;
 import xyz.catuns.onboarding.provisioning.domain.OutboxEvent;
 import xyz.catuns.onboarding.provisioning.domain.ProvisioningAuditLog;
 import xyz.catuns.onboarding.provisioning.domain.ResultState;
@@ -34,6 +37,7 @@ public class ProvisioningEventService {
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
     private final GithubProvisioningAdapter githubAdapter;
+    private final AtlassianProvisioningAdapter atlassianAdapter;
 
     @Value("${app.kafka.topics.github-provisioning}")
     private String githubProvisioningTopic;
@@ -44,11 +48,13 @@ public class ProvisioningEventService {
     public ProvisioningEventService(ProvisioningAuditLogRepository auditLogRepository,
                                     OutboxEventRepository outboxEventRepository,
                                     ObjectMapper objectMapper,
-                                    GithubProvisioningAdapter githubAdapter) {
+                                    GithubProvisioningAdapter githubAdapter,
+                                    AtlassianProvisioningAdapter atlassianAdapter) {
         this.auditLogRepository = auditLogRepository;
         this.outboxEventRepository = outboxEventRepository;
         this.objectMapper = objectMapper;
         this.githubAdapter = githubAdapter;
+        this.atlassianAdapter = atlassianAdapter;
     }
 
     @Transactional
@@ -103,13 +109,20 @@ public class ProvisioningEventService {
         UUID providerTargetId = UUID.fromString(event.getProviderTargetId());
         UUID correlationId = UUID.fromString(event.getCorrelationId());
 
+        AtlassianGroupMembershipResult result = atlassianAdapter.addGroupMember(
+                event.getAtlassianIdentityId(),
+                event.getAtlassianEmail(),
+                event.getGroupName()
+        );
+
         try {
             ProvisioningAuditLog auditLog = new ProvisioningAuditLog();
             auditLog.setOnboardingStepId(requestId);
             auditLog.setProviderId(providerTargetId);
             auditLog.setActionName("ATLASSIAN_PROVISION");
             auditLog.setRequestPayload(buildAtlassianRequestPayload(event));
-            auditLog.setResultState(ResultState.SUCCESS);
+            auditLog.setResponsePayload(buildAtlassianResponsePayload(result));
+            auditLog.setResultState(toResultState(result.membershipState()));
             auditLog.setCorrelationId(correlationId);
             auditLogRepository.save(auditLog);
 
@@ -117,7 +130,7 @@ public class ProvisioningEventService {
             outbox.setAggregateType("User");
             outbox.setAggregateId(userId);
             outbox.setEventType("AtlassianProvisioningCompletedV1");
-            outbox.setPayload(buildAtlassianCompletionPayload(event));
+            outbox.setPayload(toOutboxPayload(buildAtlassianCompletedEvent(event, result)));
             outbox.setTopic(atlassianProvisioningTopic);
             outbox.setCorrelationId(event.getCorrelationId());
             outboxEventRepository.save(outbox);
@@ -189,20 +202,25 @@ public class ProvisioningEventService {
         return objectMapper.writeValueAsString(payload);
     }
 
-    private String buildAtlassianCompletionPayload(AtlassianProvisioningRequestedV1 event) throws JsonProcessingException {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("eventId", UUID.randomUUID().toString());
-        payload.put("eventType", "AtlassianProvisioningCompletedV1");
-        payload.put("eventVersion", 1);
-        payload.put("occurredAt", Instant.now().toString());
-        payload.put("correlationId", event.getCorrelationId().toString());
-        payload.put("producer", "provisioning-service");
-        payload.put("userId", event.getUserId().toString());
-        payload.put("onboardingRequestId", event.getOnboardingRequestId().toString());
-        payload.put("providerTargetId", event.getProviderTargetId().toString());
-        payload.put("success", true);
-        payload.put("errorCode", null);
-        payload.put("errorMessage", null);
-        return objectMapper.writeValueAsString(payload);
+    private String buildAtlassianResponsePayload(AtlassianGroupMembershipResult result) throws JsonProcessingException {
+        return objectMapper.writeValueAsString(result);
+    }
+
+    private AtlassianProvisioningCompletedV1 buildAtlassianCompletedEvent(
+            AtlassianProvisioningRequestedV1 event, AtlassianGroupMembershipResult result) {
+        return AtlassianProvisioningCompletedV1.newBuilder()
+                .setEventId(UUID.randomUUID().toString())
+                .setEventType("AtlassianProvisioningCompletedV1")
+                .setEventVersion(1)
+                .setOccurredAt(Instant.now().toString())
+                .setCorrelationId(event.getCorrelationId().toString())
+                .setProducer("provisioning-service")
+                .setUserId(event.getUserId().toString())
+                .setOnboardingRequestId(event.getOnboardingRequestId().toString())
+                .setProviderTargetId(event.getProviderTargetId().toString())
+                .setSuccess(result.success())
+                .setErrorCode(result.errorCode())
+                .setErrorMessage(result.errorMessage())
+                .build();
     }
 }

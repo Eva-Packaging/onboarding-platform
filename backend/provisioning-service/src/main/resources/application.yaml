@@ -84,6 +84,11 @@ github:
     base-url: https://api.github.com
     token: ${GITHUB_API_TOKEN}
     org: ${GITHUB_ORG}
+atlassian:
+  api:
+    base-url: ${ATLASSIAN_API_BASE_URL}
+    email: ${ATLASSIAN_API_EMAIL}
+    token: ${ATLASSIAN_API_TOKEN}
 jwt:
   secret: ${JWT_SECRET}
   issuer: ${spring.application.name}

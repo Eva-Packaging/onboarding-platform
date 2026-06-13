@@ -27,6 +27,26 @@ public class OutboxPayloadBuilderService {
         return serialize(p);
     }
 
+    public String buildIdentityCorrelationCompleted(String userId, String onboardingRequestId,
+            String correlationId, String githubIdentityId, String atlassianIdentityId,
+            String matchStrategy, Double confidenceScore, boolean matched) {
+        Map<String, Object> p = base("IdentityCorrelationCompletedV1", userId, onboardingRequestId, correlationId);
+        p.put("githubIdentityId", githubIdentityId);
+        p.put("atlassianIdentityId", atlassianIdentityId);
+        p.put("matchStrategy", matchStrategy);
+        p.put("confidenceScore", confidenceScore);
+        p.put("matched", matched);
+        return serialize(p);
+    }
+
+    public String buildIdentityCorrelationFailed(String userId, String onboardingRequestId,
+            String correlationId, String reasonCode, String reasonMessage) {
+        Map<String, Object> p = base("IdentityCorrelationFailedV1", userId, onboardingRequestId, correlationId);
+        p.put("reasonCode", reasonCode);
+        p.put("reasonMessage", reasonMessage);
+        return serialize(p);
+    }
+
     public String buildGithubProvisioningRequested(String userId, String onboardingRequestId,
             String correlationId, String githubLogin, String githubOrg, String githubTeamSlug,
             String providerTargetId) {

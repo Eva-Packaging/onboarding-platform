@@ -8,10 +8,14 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestClient;
 import xyz.catuns.onboarding.provisioning.config.properties.AppProperties;
+import xyz.catuns.onboarding.provisioning.config.properties.AtlassianClientProperties;
 import xyz.catuns.onboarding.provisioning.config.properties.GithubClientProperties;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+
 @Configuration
-@EnableConfigurationProperties({AppProperties.class, GithubClientProperties.class})
+@EnableConfigurationProperties({AppProperties.class, GithubClientProperties.class, AtlassianClientProperties.class})
 class AppConfig {
 
     @Bean
@@ -36,6 +40,17 @@ class AppConfig {
         return RestClient.builder()
                 .baseUrl(properties.getApi().getBaseUrl())
                 .defaultHeader("Authorization", bearerToken)
+                .defaultHeader("Accept", "application/json")
+                .build();
+    }
+
+    @Bean
+    RestClient atlassianRestClient(AtlassianClientProperties properties) {
+        String credentials = properties.getApi().getEmail() + ":" + properties.getApi().getToken();
+        String basicAuth = "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
+        return RestClient.builder()
+                .baseUrl(properties.getApi().getBaseUrl())
+                .defaultHeader("Authorization", basicAuth)
                 .defaultHeader("Accept", "application/json")
                 .build();
     }

@@ -1,4 +1,7 @@
 app:
+  feign:
+    clients:
+      user: user-service
   kafka:
     partitions: 1
     replicas: 1
