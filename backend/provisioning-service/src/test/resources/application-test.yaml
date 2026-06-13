@@ -10,6 +10,12 @@ github:
     token: test-token
     org: test-org
 
+atlassian:
+  api:
+    base-url: http://localhost
+    email: test@example.com
+    token: test-token
+
 jwt:
   secret: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
