@@ -1,7 +1,11 @@
 spring:
   cloud:
     consul:
-      host: consul
+      host: ${CONSUL_HOST:consul}
+      port: ${CONSUL_PORT:8500}
+      discovery:
+        prefer-ip-address: false
+        hostname: ${spring.application.name}
 server:
   port: 8080
 logging:

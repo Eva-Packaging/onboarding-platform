@@ -3,6 +3,9 @@ spring:
     consul:
       host: ${CONSUL_HOST:consul}
       port: ${CONSUL_PORT:8500}
+      discovery:
+        prefer-ip-address: false
+        hostname: ${spring.application.name}
   datasource:
     url: jdbc:postgresql://${DATABASE_HOST:postgres}:${DATABASE_PORT:5432}/${DATABASE_NAME:user_service}
   kafka:
