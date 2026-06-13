@@ -264,7 +264,7 @@ public class OnboardingEventService {
             String requestId, String correlationId, ProviderTarget target) {
         String payload = payloadBuilder.buildAtlassianProvisioningRequested(
                 event.getUserId(), requestId, correlationId,
-                null, null, target.getExternalKey(), target.getId().toString());
+                null, event.getPrimaryEmail(), target.getExternalKey(), target.getId().toString());
         return newOutboxEvent(step.getOnboardingRequest().getId(),
                 "AtlassianProvisioningRequestedV1", atlassianProvisioningTopicName, correlationId, payload);
     }

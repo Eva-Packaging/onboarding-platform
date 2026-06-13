@@ -7,12 +7,16 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import xyz.catuns.onboarding.user.api.dto.AtlassianIdentitySummary;
+import xyz.catuns.onboarding.user.api.dto.ExternalIdentityLookupResponse;
 import xyz.catuns.onboarding.user.api.dto.IdentityLinkCreateRequest;
 import xyz.catuns.onboarding.user.api.dto.IdentityLinkResponse;
+import xyz.catuns.onboarding.user.domain.ExternalIdentity;
 import xyz.catuns.onboarding.user.domain.ProviderKey;
 import xyz.catuns.onboarding.user.repository.ExternalIdentityRepository;
 import xyz.catuns.onboarding.user.service.IdentityLinkService;
+
+import java.util.Optional;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/internal")
@@ -29,15 +33,20 @@ public class InternalIdentityController {
     }
 
     @GetMapping("/external-identities")
-    @Operation(summary = "Find external identity by provider and email", description = "Used by onboarding-service for identity correlation")
+    @Operation(summary = "Find external identity by provider and email, or by provider and userProfileId", description = "Used by onboarding-service for identity correlation")
     @ApiResponse(responseCode = "200", description = "HTTP Status OK")
     @ApiResponse(responseCode = "404", description = "No matching external identity")
-    ResponseEntity<AtlassianIdentitySummary> getExternalIdentity(
+    ResponseEntity<ExternalIdentityLookupResponse> getExternalIdentity(
         @RequestParam ProviderKey provider,
-        @RequestParam String email
+        @RequestParam(required = false) String email,
+        @RequestParam(required = false) UUID userProfileId
     ) {
-        return externalIdentityRepository.findByProvider_ProviderKeyAndEmail(provider, email)
-            .map(identity -> new AtlassianIdentitySummary(identity.getExternalUserId(), identity.getEmail(), "MATCHED"))
+        Optional<ExternalIdentity> identity = email != null
+            ? externalIdentityRepository.findByProvider_ProviderKeyAndEmail(provider, email)
+            : externalIdentityRepository.findByProvider_ProviderKeyAndUserProfile_Id(provider, userProfileId);
+
+        return identity
+            .map(i -> new ExternalIdentityLookupResponse(i.getId(), i.getExternalUserId(), i.getEmail(), "MATCHED"))
             .map(ResponseEntity::ok)
             .orElseGet(() -> ResponseEntity.notFound().build());
     }

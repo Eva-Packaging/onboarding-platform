@@ -43,7 +43,9 @@ class InternalIdentityControllerTest {
 
     @Test
     void getExternalIdentity_atlassianMatchByEmail_returns200WithSummary() throws Exception {
+        UUID identityId = UUID.randomUUID();
         ExternalIdentity identity = new ExternalIdentity();
+        identity.setId(identityId);
         identity.setExternalUserId("atl-account-001");
         identity.setEmail("student@example.com");
 
@@ -54,6 +56,7 @@ class InternalIdentityControllerTest {
                 .param("provider", "ATLASSIAN")
                 .param("email", "student@example.com"))
             .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id").value(identityId.toString()))
             .andExpect(jsonPath("$.accountId").value("atl-account-001"))
             .andExpect(jsonPath("$.email").value("student@example.com"))
             .andExpect(jsonPath("$.matchState").value("MATCHED"));
@@ -68,6 +71,27 @@ class InternalIdentityControllerTest {
                 .param("provider", "ATLASSIAN")
                 .param("email", "missing@example.com"))
             .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void getExternalIdentity_githubMatchByUserProfileId_returns200WithSummary() throws Exception {
+        UUID identityId = UUID.randomUUID();
+        UUID userProfileId = UUID.randomUUID();
+        ExternalIdentity identity = new ExternalIdentity();
+        identity.setId(identityId);
+        identity.setExternalUserId("12345678");
+        identity.setEmail("student@example.com");
+
+        when(externalIdentityRepository.findByProvider_ProviderKeyAndUserProfile_Id(eq(ProviderKey.GITHUB), eq(userProfileId)))
+            .thenReturn(Optional.of(identity));
+
+        mockMvc.perform(get("/api/v1/internal/external-identities")
+                .param("provider", "GITHUB")
+                .param("userProfileId", userProfileId.toString()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id").value(identityId.toString()))
+            .andExpect(jsonPath("$.accountId").value("12345678"))
+            .andExpect(jsonPath("$.matchState").value("MATCHED"));
     }
 
     @Test
