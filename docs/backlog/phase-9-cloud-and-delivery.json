@@ -1,0 +1,390 @@
+{
+  "summary": "Phase 9: Cloud Delivery — External Postgres, Confluent Kafka, and GitHub Actions CI/CD",
+  "description": "Implements the <docs/roadmap.md> Phase 9 'Cloud and delivery' deliverables against the infrastructure decisions made for this platform: PostgreSQL is hosted on an externally managed instance (not Cloud SQL) reachable over a public endpoint with SSL, Kafka and the Schema Registry are provisioned on Confluent Cloud (matching the Confluent Platform images already used in the local docker-compose stack and the KAFKA_BOOTSTRAP_SERVERS/SCHEMA_REGISTRY_URL vars in <.env.example>), and CI/CD runs on GitHub Actions using Workload Identity Federation rather than static service account keys. EDP-74 and EDP-342 already scaffolded and partially applied the Terraform modules under <infra/terraform/> (artifact-registry, iam, secret-manager, cloud-run, cloud-sql); this epic removes the cloud-sql module and its Cloud Run wiring, adds new confluent-kafka and workload-identity modules, and builds the GitHub Actions pipelines on top of all of it. CI is split so that changes under <backend/user-service/>, <backend/onboarding-service/>, <backend/provisioning-service/>, and <backend/api-gateway/> each trigger only their own Maven test job, and changes under <frontend/> trigger an Nx-affected pipeline; a deploy pipeline then builds, pushes, and deploys only the affected services to dev automatically, with production gated behind a manual approval. Exit criteria per <docs/roadmap.md>: staging deployment works end to end, production rollout is repeatable, and secrets are never committed to source control.",
+  "labels": ["phase-9", "terraform", "gcp", "ci-cd", "github-actions", "kafka", "confluent", "postgresql", "cloud-run", "devops", "observability"],
+  "priority": "High",
+  "userType": "operations engineer",
+  "functionality": "deploy and operate all backend services and the frontend on Cloud Run against an externally managed PostgreSQL database and a Confluent Cloud Kafka cluster, with GitHub Actions pipelines that automatically test, build, and deploy only the services affected by a given change",
+  "benefit": "staging and production rollouts become repeatable and auditable without self-managed Cloud SQL or Kafka infrastructure, secrets never leave Secret Manager or GitHub Environments, and CI feedback stays fast because unaffected services are skipped",
+  "stories": [
+    {
+      "summary": "Replace Cloud SQL Terraform module with external managed Postgres connectivity",
+      "description": "EDP-342 provisioned a cloud_sql module (<infra/terraform/modules/cloud-sql/>) wired into <infra/terraform/main.tf> with a DB_INSTANCE_CONNECTION_NAME env var and --add-cloudsql-instances in <scripts/gcloud/deploy-service.sh>. Per the updated infrastructure decision, PostgreSQL is now an externally managed instance reachable over a public endpoint with SSL — Terraform no longer provisions the database itself. This story removes the cloud-sql module entirely, replaces the DB_INSTANCE_CONNECTION_NAME env var on the user-service, onboarding-service, and provisioning-service Cloud Run modules with DB_HOST, DB_PORT, and DB_SSLMODE, removes the now-unused vpc_network, db_tier, and deletion_protection variables and the roles/cloudsql.client IAM binding in <infra/terraform/modules/iam/>, and updates <scripts/gcloud/deploy-service.sh> and the environment tfvars accordingly. DB_PASSWORD continues to come from the existing postgres-password Secret Manager secret. Documentation in <README.md>, <docs/build-and-deploy.md>, and <docs/roadmap.md> is updated to describe an external managed PostgreSQL instance instead of Cloud SQL.",
+      "labels": ["terraform", "postgresql", "gcp", "infrastructure"],
+      "priority": "High",
+      "storyPoints": 8,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Terraform plan succeeds without the Cloud SQL module",
+          "given": "<infra/terraform/modules/cloud-sql/> has been removed and <infra/terraform/main.tf> no longer declares a cloud_sql module",
+          "when": "terraform plan -var-file=environments/dev.tfvars is run from <infra/terraform/>",
+          "then": "the plan completes without any google_sql_database_instance resources, and the user-service, onboarding-service, and provisioning-service Cloud Run modules show DB_HOST, DB_PORT, and DB_SSLMODE env vars instead of DB_INSTANCE_CONNECTION_NAME"
+        },
+        {
+          "scenario": "Cloud Run services receive external Postgres connection details",
+          "given": "db_host, db_port, and db_sslmode are set in environments/dev.tfvars",
+          "when": "terraform apply provisions the user-service Cloud Run service",
+          "then": "the deployed service has DB_HOST set to the external host, DB_PORT=5432, DB_SSLMODE=require, and DB_PASSWORD sourced from the postgres-password Secret Manager secret"
+        },
+        {
+          "scenario": "deploy-service.sh no longer attaches a Cloud SQL instance",
+          "given": "the --full-config flag is passed for user-service",
+          "when": "./scripts/gcloud/deploy-service.sh --full-config --app-env dev --dry-run user-service is run",
+          "then": "the printed gcloud command does not include --add-cloudsql-instances, and --set-env-vars includes DB_HOST, DB_PORT, and DB_SSLMODE=require"
+        },
+        {
+          "scenario": "IAM module no longer grants Cloud SQL client access",
+          "given": "<infra/terraform/modules/iam/main.tf> has removed the sql_client resource and the sql_service_names variable",
+          "when": "terraform plan is run",
+          "then": "no roles/cloudsql.client IAM bindings are proposed for any Cloud Run service account"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Remove the cloud-sql Terraform module and its wiring",
+          "description": "Delete <infra/terraform/modules/cloud-sql/>, remove the module \"cloud_sql\" block from <infra/terraform/main.tf>, and remove the cloud_sql_connection_name output from <infra/terraform/outputs.tf>."
+        },
+        {
+          "summary": "Add external Postgres connectivity variables and update Cloud Run env vars",
+          "description": "In <infra/terraform/variables.tf>, remove vpc_network, db_tier, and deletion_protection, and add db_host (string), db_port (number, default 5432), and db_sslmode (string, default \"require\"). In <infra/terraform/main.tf>, replace the DB_INSTANCE_CONNECTION_NAME env var on the cloud_run_user_service, cloud_run_onboarding_service, and cloud_run_provisioning_service modules with DB_HOST, DB_PORT, and DB_SSLMODE sourced from these variables."
+        },
+        {
+          "summary": "Remove Cloud SQL IAM bindings from the iam module",
+          "description": "In <infra/terraform/modules/iam/>, remove the google_project_iam_member.sql_client resource and the sql_service_names variable, and remove the sql_service_names argument from the module \"iam\" block in <infra/terraform/main.tf>."
+        },
+        {
+          "summary": "Update deploy-service.sh for external Postgres",
+          "description": "In <scripts/gcloud/deploy-service.sh>, remove the sql_instance variable, the --add-cloudsql-instances flag, and the DB_INSTANCE_CONNECTION_NAME env var, replacing them with DB_HOST, DB_PORT, and DB_SSLMODE read from .env (e.g. DATABASE_HOST, DATABASE_PORT)."
+        },
+        {
+          "summary": "Update environment tfvars with external Postgres values",
+          "description": "Update <infra/terraform/environments/dev.tfvars> and <infra/terraform/environments/prod.tfvars> to remove vpc_network, db_tier, and deletion_protection, and add db_host (per-environment external Postgres hostname), db_port = 5432, and db_sslmode = \"require\"."
+        },
+        {
+          "summary": "Update docs and .env.example for external Postgres",
+          "description": "Update the 'Cloud Setup' section of <README.md>, the bootstrap sequence text in <docs/build-and-deploy.md>, and the Phase 9 deliverables bullet in <docs/roadmap.md> to describe an external managed PostgreSQL instance instead of Cloud SQL. Add DATABASE_HOST and DATABASE_PORT entries to <.env.example> for use by the deploy script."
+        }
+      ]
+    },
+    {
+      "summary": "Provision Confluent Cloud Kafka cluster, topics, and Schema Registry via Terraform",
+      "description": "Local development already runs Confluent Platform 8.2.0 images for Kafka and the Schema Registry (see docker-compose.yml and the Confluent section of <.env.example>, which defines KAFKA_BOOTSTRAP_SERVERS and SCHEMA_REGISTRY_URL). This story provisions the production equivalent on Confluent Cloud via a new <infra/terraform/modules/confluent-kafka/> module, using the confluentinc/confluent Terraform provider added to <infra/terraform/versions.tf>. The module creates a confluent_environment, a confluent_kafka_cluster (Basic for dev, Standard for prod via an environment-driven variable), a Stream Governance package for the managed Schema Registry, and confluent_kafka_topic resources for the five topics defined in <docs/schemas/kafka-event-schema.md>: edu.user.registered.v1, edu.identity.correlation.v1, edu.provisioning.github.v1, edu.provisioning.atlassian.v1, and edu.onboarding.lifecycle.v1. confluent_api_key resources generate Kafka cluster and Schema Registry credentials, written into new secrets (confluent-kafka-api-key, confluent-kafka-api-secret, confluent-schema-registry-api-key, confluent-schema-registry-api-secret) added to the secret_ids list in <infra/terraform/modules/secret-manager/main.tf>. The cluster's bootstrap endpoint and Schema Registry URL are exposed as module outputs and wired as KAFKA_BOOTSTRAP_SERVERS/SCHEMA_REGISTRY_URL env vars on the user-service, onboarding-service, and provisioning-service Cloud Run modules in <infra/terraform/main.tf>, alongside the new secret-backed credential env vars. Because Confluent Cloud requires SASL_SSL authentication (unlike the local PLAINTEXT broker), a new prod Spring profile (application-prod.yml) is added to each of the three services configuring spring.kafka.security.protocol=SASL_SSL, sasl.mechanism=PLAIN, a JAAS config templated from KAFKA_API_KEY/KAFKA_API_SECRET, and schema.registry.basic.auth.credentials.source=USER_INFO using SCHEMA_REGISTRY_API_KEY/SCHEMA_REGISTRY_API_SECRET. The default/local profile is unchanged.",
+      "labels": ["terraform", "kafka", "confluent", "schema-registry", "infrastructure"],
+      "priority": "High",
+      "storyPoints": 8,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Confluent Kafka cluster and topics are provisioned",
+          "given": "modules/confluent-kafka is wired into <infra/terraform/main.tf> with the confluent provider configured",
+          "when": "terraform apply -var-file=environments/dev.tfvars is run",
+          "then": "a confluent_kafka_cluster exists in a dedicated Confluent Cloud environment and confluent_kafka_topic resources exist for all five topics from <docs/schemas/kafka-event-schema.md>"
+        },
+        {
+          "scenario": "Confluent credentials are stored in Secret Manager, not in state output",
+          "given": "confluent_api_key resources generate Kafka and Schema Registry API key/secret pairs",
+          "when": "terraform apply completes",
+          "then": "Secret Manager contains confluent-kafka-api-key, confluent-kafka-api-secret, confluent-schema-registry-api-key, and confluent-schema-registry-api-secret with the generated values, and these values are marked sensitive in Terraform output"
+        },
+        {
+          "scenario": "Backend services receive Confluent connection configuration",
+          "given": "the confluent-kafka module outputs a bootstrap endpoint and Schema Registry URL",
+          "when": "the onboarding-service Cloud Run module is applied",
+          "then": "KAFKA_BOOTSTRAP_SERVERS and SCHEMA_REGISTRY_URL env vars point to the Confluent Cloud cluster, and KAFKA_API_KEY, KAFKA_API_SECRET, SCHEMA_REGISTRY_API_KEY, and SCHEMA_REGISTRY_API_SECRET are sourced from Secret Manager"
+        },
+        {
+          "scenario": "prod profile authenticates to Confluent Cloud without breaking local dev",
+          "given": "a prod Spring profile configured with spring.kafka.security.protocol=SASL_SSL and a SASL JAAS config built from KAFKA_API_KEY/KAFKA_API_SECRET",
+          "when": "onboarding-service starts with SPRING_PROFILES_ACTIVE=prod",
+          "then": "it authenticates to the Confluent Cloud cluster and Schema Registry, while the default/local profile continues connecting to the PLAINTEXT kafka-1:9092 broker unchanged"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add the Confluent Terraform provider",
+          "description": "Add the confluentinc/confluent provider (~> 2.0) to <infra/terraform/versions.tf> with a provider block reading CONFLUENT_CLOUD_API_KEY and CONFLUENT_CLOUD_API_SECRET from the environment, following the same never-commit-secrets pattern as db_password."
+        },
+        {
+          "summary": "Scaffold modules/confluent-kafka",
+          "description": "Create <infra/terraform/modules/confluent-kafka/> with a confluent_environment, a confluent_kafka_cluster (cluster type driven by an environment variable: BASIC for dev, STANDARD for prod), and a Stream Governance package providing the managed Schema Registry. Expose bootstrap_endpoint and schema_registry_url outputs."
+        },
+        {
+          "summary": "Add confluent_kafka_topic resources for existing event topics",
+          "description": "Add confluent_kafka_topic resources for edu.user.registered.v1, edu.identity.correlation.v1, edu.provisioning.github.v1, edu.provisioning.atlassian.v1, and edu.onboarding.lifecycle.v1 with partition counts and retention matching <docs/schemas/kafka-event-schema.md>."
+        },
+        {
+          "summary": "Provision Confluent API keys and store them in Secret Manager",
+          "description": "Add confluent_api_key resources for the Kafka cluster and Schema Registry, then add confluent-kafka-api-key, confluent-kafka-api-secret, confluent-schema-registry-api-key, and confluent-schema-registry-api-secret to the secret_ids list in <infra/terraform/modules/secret-manager/main.tf> and write the generated values as secret versions."
+        },
+        {
+          "summary": "Wire Kafka env vars into the three backend Cloud Run modules",
+          "description": "In <infra/terraform/main.tf>, add KAFKA_BOOTSTRAP_SERVERS and SCHEMA_REGISTRY_URL as plain env_vars (from confluent-kafka module outputs) and KAFKA_API_KEY, KAFKA_API_SECRET, SCHEMA_REGISTRY_API_KEY, SCHEMA_REGISTRY_API_SECRET as secret_env_vars on the user-service, onboarding-service, and provisioning-service modules."
+        },
+        {
+          "summary": "Add a prod Spring Kafka SASL_SSL profile to each backend service",
+          "description": "Add application-prod.yml to <backend/user-service/src/main/resources/>, <backend/onboarding-service/src/main/resources/>, and <backend/provisioning-service/src/main/resources/> configuring spring.kafka.security.protocol=SASL_SSL, sasl.mechanism=PLAIN with a JAAS config templated from KAFKA_API_KEY/KAFKA_API_SECRET env vars, and schema.registry.basic.auth.credentials.source=USER_INFO using SCHEMA_REGISTRY_API_KEY/SCHEMA_REGISTRY_API_SECRET. Leave the default/local profile untouched."
+        }
+      ]
+    },
+    {
+      "summary": "Add Workload Identity Federation for GitHub Actions deploys to GCP",
+      "description": "EDP-342's modules/iam already creates an image-builder service account for make docker-push (see image_builder_service_account_email in <infra/terraform/outputs.tf>), but nothing authenticates GitHub Actions to GCP yet, and no static service account key should be created or stored as a repository secret. This story adds a new <infra/terraform/modules/workload-identity/> module that creates a google_iam_workload_identity_pool and google_iam_workload_identity_pool_provider for https://token.actions.githubusercontent.com, with an attribute condition restricting assertion.repository to Eva-Packaging/onboarding-platform. A new github-actions-deployer service account is granted roles/run.admin, roles/artifactregistry.writer, and roles/iam.serviceAccountUser (needed to deploy Cloud Run revisions running as the per-service runtime service accounts from <infra/terraform/modules/iam/>), and the WIF pool's principal set is bound to roles/iam.workloadIdentityUser on that service account. The module's workload_identity_provider and github_actions_service_account_email outputs are consumed by the google-github-actions/auth@v2 step in the CI/CD workflows added in Story 6.",
+      "labels": ["terraform", "gcp", "iam", "github-actions", "security"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "WIF provider is scoped to this repository",
+          "given": "modules/workload-identity is applied with github_repository set to Eva-Packaging/onboarding-platform",
+          "when": "terraform apply -var-file=environments/dev.tfvars runs",
+          "then": "a google_iam_workload_identity_pool_provider exists with an attribute condition restricting assertion.repository to Eva-Packaging/onboarding-platform"
+        },
+        {
+          "scenario": "github-actions-deployer can be impersonated only via the WIF pool",
+          "given": "the github-actions-deployer service account exists with roles/run.admin, roles/artifactregistry.writer, and roles/iam.serviceAccountUser",
+          "when": "the google_service_account_iam_member bindings are inspected",
+          "then": "only the WIF pool's principalSet has roles/iam.workloadIdentityUser on the service account, and no JSON key exists for the account"
+        },
+        {
+          "scenario": "GitHub Actions authenticates without a stored key",
+          "given": "the workload_identity_provider and github_actions_service_account_email outputs are available",
+          "when": "a workflow step runs google-github-actions/auth@v2 with those values as workload_identity_provider and service_account inputs",
+          "then": "subsequent gcloud and docker commands in the job are authenticated as github-actions-deployer without any GCP_SA_KEY repository secret being configured"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Scaffold modules/workload-identity",
+          "description": "Create <infra/terraform/modules/workload-identity/> with a google_iam_workload_identity_pool and a google_iam_workload_identity_pool_provider for the GitHub Actions OIDC issuer (https://token.actions.githubusercontent.com), mapping assertion.repository and assertion.ref attributes."
+        },
+        {
+          "summary": "Restrict the WIF provider to this repository",
+          "description": "Add an attribute_condition on the workload identity pool provider restricting assertion.repository == \"Eva-Packaging/onboarding-platform\"."
+        },
+        {
+          "summary": "Create the github-actions-deployer service account and role bindings",
+          "description": "Add a google_service_account named github-actions-deployer and google_project_iam_member bindings granting roles/run.admin, roles/artifactregistry.writer, and roles/iam.serviceAccountUser."
+        },
+        {
+          "summary": "Bind the WIF pool to impersonate the deployer service account",
+          "description": "Add a google_service_account_iam_member granting roles/iam.workloadIdentityUser on github-actions-deployer to the workload identity pool's principalSet, scoped to the repository attribute condition."
+        },
+        {
+          "summary": "Wire the module into root configuration and document usage",
+          "description": "Add a module \"workload_identity\" block to <infra/terraform/main.tf>, a github_repository variable to <infra/terraform/variables.tf>, expose workload_identity_provider and github_actions_service_account_email in <infra/terraform/outputs.tf>, and document the google-github-actions/auth@v2 step shape in <docs/build-and-deploy.md>."
+        }
+      ]
+    },
+    {
+      "summary": "Add path-filtered backend CI pipeline with per-service Maven test jobs",
+      "description": "Each backend service under <backend/> (user-service, onboarding-service, provisioning-service, api-gateway) has its own Maven wrapper and is built and tested independently (./mvnw test per service, per CLAUDE.md). This story adds <.github/workflows/backend-ci.yml>, triggered on push and pull_request for paths under backend/**. A changes job uses dorny/paths-filter (pinned to a release tag, e.g. dorny/paths-filter@v3) to detect which of the four service directories changed. Four independent jobs — user-service-tests, onboarding-service-tests, provisioning-service-tests, and api-gateway-tests — each declare needs: changes and run only if: needs.changes.outputs.<service> == 'true', checking out the repo, setting up the project's JDK with actions/setup-java (cache: maven), and running cd backend/<service> && ./mvnw test on ubuntu-latest, where Docker is available by default for the existing TestContainers-based integration tests.",
+      "labels": ["github-actions", "ci", "backend", "maven", "testing"],
+      "priority": "High",
+      "storyPoints": 5,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Only the changed service's job runs",
+          "given": "a pull request modifies only files under backend/user-service/",
+          "when": ".github/workflows/backend-ci.yml runs",
+          "then": "only the user-service-tests job executes; onboarding-service-tests, provisioning-service-tests, and api-gateway-tests are skipped"
+        },
+        {
+          "scenario": "TestContainers-based integration tests pass in CI",
+          "given": "the user-service-tests job runs ./mvnw test on an ubuntu-latest runner with Docker available",
+          "when": "TestContainers starts Postgres and Kafka containers during the test run",
+          "then": "the test suite completes successfully and the job reports a pass/fail status check named user-service-tests"
+        },
+        {
+          "scenario": "Changes to multiple services run multiple jobs",
+          "given": "a pull request modifies files under both backend/onboarding-service/ and backend/provisioning-service/",
+          "when": "the backend-ci workflow runs",
+          "then": "both onboarding-service-tests and provisioning-service-tests jobs execute in parallel, while user-service-tests and api-gateway-tests are skipped"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add a dorny/paths-filter change-detection job",
+          "description": "Create <.github/workflows/backend-ci.yml> with a changes job using dorny/paths-filter, pinned to a release tag, defining filters for backend/user-service/**, backend/onboarding-service/**, backend/provisioning-service/**, and backend/api-gateway/**."
+        },
+        {
+          "summary": "Add per-service Maven test jobs gated on the changes outputs",
+          "description": "Add user-service-tests, onboarding-service-tests, provisioning-service-tests, and api-gateway-tests jobs, each with needs: changes and if: needs.changes.outputs.<service> == 'true', running cd backend/<service> && ./mvnw test."
+        },
+        {
+          "summary": "Configure Java toolchain and Maven dependency caching",
+          "description": "Use actions/setup-java with the project's JDK version and cache: maven in each per-service job to cache the local Maven repository keyed per service."
+        },
+        {
+          "summary": "Verify TestContainers runs cleanly on ubuntu-latest",
+          "description": "Confirm the existing TestContainers-based integration tests in each service run without additional configuration on ubuntu-latest runners; document any Docker socket permission notes that come up."
+        },
+        {
+          "summary": "Configure workflow triggers and document status checks",
+          "description": "Set on.push.paths and on.pull_request.paths to backend/** in <.github/workflows/backend-ci.yml>, and document the four status check names (user-service-tests, onboarding-service-tests, provisioning-service-tests, api-gateway-tests) for branch protection configuration in <docs/build-and-deploy.md>."
+        }
+      ]
+    },
+    {
+      "summary": "Add Nx-affected GitHub Actions pipeline for the frontend",
+      "description": "Adds <.github/workflows/frontend-ci.yml>, triggered on push and pull_request for paths under frontend/**. The job installs dependencies with pnpm install --frozen-lockfile (cached via actions/setup-node's cache: pnpm), runs nrwl/nx-set-shas@v4 to compute NX_BASE/NX_HEAD for the Nx project graph, and then runs pnpm nx affected -t lint test build --parallel from frontend/. Because Nx computes affected projects from the dependency graph rather than just changed file paths, a change to <frontend/features/auth/> correctly triggers lint/test/build for both the auth library and any app — such as <frontend/apps/web/> — that depends on it, matching the pnpm nx run-many -t build / pnpm nx run-many -t test conventions already documented in CLAUDE.md. The Nx computation cache is cached between runs keyed on the pnpm lockfile hash to speed up repeat runs.",
+      "labels": ["github-actions", "ci", "frontend", "nx", "nextjs"],
+      "priority": "Medium",
+      "storyPoints": 3,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Only affected Nx projects run on a frontend change",
+          "given": "a pull request modifies a file only within frontend/features/auth/",
+          "when": ".github/workflows/frontend-ci.yml runs pnpm nx affected -t lint test build",
+          "then": "the auth library and any projects depending on it, such as web, are linted, tested, and built, while unaffected projects are skipped"
+        },
+        {
+          "scenario": "nx-set-shas computes the correct base for pull requests",
+          "given": "nrwl/nx-set-shas runs at the start of the job on a pull_request event",
+          "when": "the NX_BASE and NX_HEAD environment variables are set",
+          "then": "pnpm nx affected commands compare against the pull request's target branch rather than only the immediately preceding commit"
+        },
+        {
+          "scenario": "Non-frontend changes do not trigger the workflow",
+          "given": "a pull request modifies only files under backend/",
+          "when": "push and pull_request events fire",
+          "then": "frontend-ci.yml does not run"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add frontend-ci.yml with a frontend/** path trigger",
+          "description": "Create <.github/workflows/frontend-ci.yml> with on.push.paths and on.pull_request.paths set to frontend/**."
+        },
+        {
+          "summary": "Install pnpm dependencies with caching",
+          "description": "Use pnpm/action-setup and actions/setup-node with cache: pnpm, then run pnpm install --frozen-lockfile from frontend/."
+        },
+        {
+          "summary": "Run nx-set-shas and nx affected",
+          "description": "Add an nrwl/nx-set-shas@v4 step to compute NX_BASE/NX_HEAD, then run pnpm nx affected -t lint test build --parallel."
+        },
+        {
+          "summary": "Cache the Nx computation cache",
+          "description": "Add an actions/cache step for the Nx computation cache directory under frontend/, keyed on the pnpm-lock.yaml hash."
+        }
+      ]
+    },
+    {
+      "summary": "Add path-filtered CD pipeline: build, push, and deploy to Cloud Run (dev auto, prod gated)",
+      "description": "Adds <.github/workflows/deploy.yml>, triggered on push to main. The workflow reuses a dorny/paths-filter-based changes job (covering backend/user-service/**, backend/onboarding-service/**, backend/provisioning-service/**, backend/api-gateway/**, and frontend/apps/web/** mapped to the web Cloud Run service) and authenticates to GCP via google-github-actions/auth@v2 using the workload_identity_provider and github_actions_service_account_email outputs from Story 3 — no static service account key is stored as a repository secret. For each affected service, a deploy-dev job runs make docker-push-<service> (Buildpacks build and push to Artifact Registry, per docs/build-and-deploy.md) followed by make deploy-<service> against the dev GCP project, running automatically on every push to main. A corresponding deploy-prod job needs: the dev job, targets the production GitHub Environment (configured in repo Settings > Environments with a required reviewer — a one-time manual repo configuration step, not Terraform-managed), and repeats the build/push/deploy against the prod GCP project. <infra/terraform/environments/dev.tfvars> and <infra/terraform/environments/prod.tfvars> are updated with the db_host/db_port/db_sslmode values from Story 1 and any Confluent Cloud identifiers from Story 2 needed at apply time, and <.env.example> is updated with any new variables the Makefile targets or workflows reference. Finally, the full dev stack (terraform apply plus this deploy workflow) is validated end to end against the roadmap's Phase 9 exit criterion: a registration submitted to the deployed dev api-gateway completes onboarding through to a terminal state.",
+      "labels": ["github-actions", "cd", "cloud-run", "deployment", "gcp"],
+      "priority": "High",
+      "storyPoints": 8,
+      "acceptanceCriteria": [
+        {
+          "scenario": "Merge to main auto-deploys an affected service to dev",
+          "given": "a pull request that changed only backend/api-gateway/ is merged to main",
+          "when": ".github/workflows/deploy.yml runs on the push to main",
+          "then": "the api-gateway-deploy-dev job authenticates via Workload Identity Federation, runs make docker-push-api-gateway and make deploy-api-gateway against the dev environment, and the deploy-dev jobs for the other services are skipped"
+        },
+        {
+          "scenario": "Production deploy requires manual approval",
+          "given": "the user-service-deploy-dev job has succeeded",
+          "when": "the user-service-deploy-prod job starts and targets the production GitHub Environment",
+          "then": "the job pauses awaiting a required reviewer's approval before running make deploy-user-service against the prod GCP project"
+        },
+        {
+          "scenario": "Frontend changes deploy the web service",
+          "given": "a merge to main includes changes under frontend/apps/web/",
+          "when": "deploy.yml evaluates the change-detection outputs",
+          "then": "the web Cloud Run service is built, pushed, and deployed to dev following the same WIF-authenticated flow as backend services"
+        },
+        {
+          "scenario": "End-to-end staging deployment matches the roadmap exit criterion",
+          "given": "dev.tfvars includes db_host pointing at the external Postgres instance and the relevant outputs from modules/confluent-kafka",
+          "when": "terraform apply -var-file=environments/dev.tfvars is followed by a deploy.yml run for all services",
+          "then": "a registration request submitted to the deployed dev api-gateway completes onboarding end to end, satisfying the 'staging deployment works end to end' exit criterion in docs/roadmap.md"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Add deploy.yml with shared change-detection and WIF auth",
+          "description": "Create <.github/workflows/deploy.yml> triggered on push to main, with a dorny/paths-filter changes job covering all five service paths, and a google-github-actions/auth@v2 step using the workload_identity_provider and github_actions_service_account_email outputs from modules/workload-identity."
+        },
+        {
+          "summary": "Add per-service dev deploy jobs",
+          "description": "For each affected service, add a <service>-deploy-dev job that runs make docker-push-<service> followed by make deploy-<service>, using dev GCP project values from GitHub Environment variables/secrets."
+        },
+        {
+          "summary": "Add per-service production deploy jobs behind a manual approval gate",
+          "description": "Add <service>-deploy-prod jobs that needs: the corresponding deploy-dev job and run under environment: production, repeating the build/push/deploy against the prod GCP project. Document configuring a required reviewer under repo Settings > Environments in <docs/build-and-deploy.md>."
+        },
+        {
+          "summary": "Update dev.tfvars and prod.tfvars with Story 1 and Story 2 values",
+          "description": "Add db_host, db_port, and db_sslmode to <infra/terraform/environments/dev.tfvars> and <infra/terraform/environments/prod.tfvars>, plus any Confluent Cloud environment/cluster identifiers required by modules/confluent-kafka at apply time."
+        },
+        {
+          "summary": "Update .env.example with CD-related variables",
+          "description": "Add any new variables referenced by the Makefile deploy targets or by deploy.yml (e.g. external Postgres host/port, Confluent identifiers) to <.env.example>."
+        },
+        {
+          "summary": "Validate the end-to-end dev deployment against roadmap Phase 9 exit criteria",
+          "description": "Run terraform apply for the dev environment followed by a full deploy.yml run, then exercise the registration-to-onboarding flow against the deployed dev services and record the results in <docs/backlog/pr/>."
+        }
+      ]
+    },
+    {
+      "summary": "Add cloud-native service routing and observability for the prod profile",
+      "description": "The base <backend/api-gateway/src/main/resources/application.yaml> defines every Spring Cloud Gateway route as uri: lb://user-service / lb://onboarding-service / lb://provisioning-service, resolved via spring-cloud-starter-consul-discovery against spring.cloud.consul.host (only set to consul for the docker profile). <backend/api-gateway/src/main/resources/application-prod.yaml> currently only sets server.port and log levels — it does not override these routes, so api-gateway cannot resolve any backend in Cloud Run, where no Consul agent exists. <infra/terraform/main.tf> already computes USER_SERVICE_URL, ONBOARDING_SERVICE_URL, and PROVISIONING_SERVICE_URL as Cloud Run service URLs and injects them into the api-gateway Cloud Run module, but nothing in the Spring config consumes them yet. user-service and onboarding-service also register with Consul via spring.cloud.consul in their base <application.yaml> files, with no prod-profile override to disable this. Separately, all four services' base <application.yaml> files default management.zipkin.tracing.endpoint to http://localhost:9411/api/v2/spans with no prod override, while <infra/terraform/modules/iam/main.tf> already grants every Cloud Run service account roles/cloudtrace.agent and roles/monitoring.metricWriter — both currently unused by any dependency. This story adds prod-profile configuration so api-gateway routes directly to the injected Cloud Run service URLs with Consul discovery disabled, the Consul client is disabled for user-service and onboarding-service in prod, traces export to Cloud Trace and metrics export to Cloud Monitoring using the IAM roles already granted, and structured JSON logs carry a logging.googleapis.com/trace field for log-to-trace correlation in Cloud Logging. The existing Zipkin/Prometheus/Grafana/Loki/Promtail docker-compose stack remains the local-dev observability backend, unchanged.",
+      "labels": ["observability", "tracing", "metrics", "logging", "cloud-run", "spring-cloud-gateway"],
+      "priority": "High",
+      "storyPoints": 8,
+      "acceptanceCriteria": [
+        {
+          "scenario": "api-gateway resolves routes via static Cloud Run URLs in prod",
+          "given": "<backend/api-gateway/src/main/resources/application-prod.yaml> overrides the user-service, onboarding-service, admin-to-onboarding, and provisioning-service route uris to ${USER_SERVICE_URL}, ${ONBOARDING_SERVICE_URL}, and ${PROVISIONING_SERVICE_URL} instead of lb://..., and sets spring.cloud.gateway.server.webflux.discovery.locator.enabled to false",
+          "when": "api-gateway starts with SPRING_PROFILES_ACTIVE=prod using the env vars injected by infra/terraform/main.tf",
+          "then": "a request to /api/v1/onboarding/{requestId} is proxied directly to the onboarding-service Cloud Run URL without any Consul lookup, and the gateway starts successfully with no Consul agent present"
+        },
+        {
+          "scenario": "Consul client is disabled in prod",
+          "given": "spring.cloud.consul.enabled is set to false in the prod profile of api-gateway, user-service, and onboarding-service",
+          "when": "each service starts with SPRING_PROFILES_ACTIVE=prod",
+          "then": "no Consul registration or discovery calls are attempted and startup does not fail or block waiting for a Consul agent"
+        },
+        {
+          "scenario": "Traces export to Cloud Trace in prod without a hosted Zipkin",
+          "given": "a prod-profile Brave sender configured to publish spans to Cloud Trace using the roles/cloudtrace.agent role already granted in <infra/terraform/modules/iam/main.tf>",
+          "when": "a registration request flows through api-gateway to user-service with SPRING_PROFILES_ACTIVE=prod and no ZIPKIN_ENDPOINT is configured",
+          "then": "the resulting trace, including the correlationId baggage field, is visible in Cloud Trace"
+        },
+        {
+          "scenario": "Metrics and trace-correlated logs reach Cloud Monitoring and Cloud Logging",
+          "given": "a prod-profile Stackdriver MeterRegistry using the roles/monitoring.metricWriter role already granted in <infra/terraform/modules/iam/main.tf>, and a logging.googleapis.com/trace field populated from the active span's trace ID in each service's JSON log encoder",
+          "when": "onboarding-service runs in Cloud Run with SPRING_PROFILES_ACTIVE=prod",
+          "then": "onboarding_step_failures_total and other custom counters from the observability epic are queryable in Cloud Monitoring, and a log entry for a request can be correlated to its trace in the Cloud Trace UI via the logging.googleapis.com/trace field"
+        }
+      ],
+      "tasks": [
+        {
+          "summary": "Override api-gateway prod routes to use static Cloud Run service URLs",
+          "description": "In <backend/api-gateway/src/main/resources/application-prod.yaml>, override spring.cloud.gateway.server.webflux.routes so the user-service, onboarding-service, admin-to-onboarding, and provisioning-service route uris point to ${USER_SERVICE_URL}, ${ONBOARDING_SERVICE_URL}, and ${PROVISIONING_SERVICE_URL} (already injected by <infra/terraform/main.tf>) instead of lb://..., and set spring.cloud.gateway.server.webflux.discovery.locator.enabled to false."
+        },
+        {
+          "summary": "Disable the Consul discovery client for the prod profile",
+          "description": "Set spring.cloud.consul.enabled to false in <backend/api-gateway/src/main/resources/application-prod.yaml>, <backend/user-service/src/main/resources/application-prod.yaml>, and <backend/onboarding-service/src/main/resources/application-prod.yaml> so none of these services attempt Consul registration or discovery when SPRING_PROFILES_ACTIVE=prod."
+        },
+        {
+          "summary": "Export traces to Cloud Trace in prod instead of Zipkin",
+          "description": "Add a Cloud Trace-compatible Brave sender (e.g. io.zipkin.gcp:zipkin-sender-stackdriver) to the four backend pom.xml files, and in each application-prod.yaml configure a prod-profile-only Brave Sender bean that publishes spans to Cloud Trace using the project's GOOGLE_CLOUD_PROJECT id and the roles/cloudtrace.agent role already granted in <infra/terraform/modules/iam/main.tf>, replacing the default management.zipkin.tracing.endpoint for prod."
+        },
+        {
+          "summary": "Export metrics to Cloud Monitoring in prod",
+          "description": "Add io.micrometer:micrometer-registry-stackdriver to the four backend pom.xml files and configure a prod-profile-only Stackdriver MeterRegistry, using the roles/monitoring.metricWriter role already granted in <infra/terraform/modules/iam/main.tf>, so the existing custom counters (onboarding_registrations_total, onboarding_step_failures_total, provisioning_outcomes_total) and standard Micrometer metrics are pushed to Cloud Monitoring without relying on a scraped /actuator/prometheus endpoint."
+        },
+        {
+          "summary": "Align structured JSON logs with Cloud Logging trace correlation",
+          "description": "Update each service's logback-spring.xml JSON encoder configuration to emit a logging.googleapis.com/trace field formatted as projects/<GOOGLE_CLOUD_PROJECT>/traces/<traceId> and a logging.googleapis.com/spanId field, alongside the existing severity, message, and MDC fields (traceId, spanId, correlationId, userId), so Cloud Logging entries link to their Cloud Trace spans."
+        },
+        {
+          "summary": "Document the prod observability and routing architecture",
+          "description": "Update <docs/build-and-deploy.md> to describe Cloud Trace, Cloud Monitoring, and Cloud Logging as the prod observability backends and static Cloud Run URLs as the prod routing mechanism, with the existing Zipkin/Prometheus/Grafana/Loki/Promtail docker-compose stack and Consul service discovery documented explicitly as local-dev-only."
+        }
+      ]
+    }
+  ]
+}
