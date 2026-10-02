@@ -12,6 +12,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.kafka.KafkaConnectionDetails;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -45,8 +46,10 @@ class KafkaConfig {
     private String schemaRegistryUrl;
 
     @Bean
-    public ProducerFactory<String, SpecificRecord> producerFactory(KafkaProperties kafkaProperties) {
+    public ProducerFactory<String, SpecificRecord> producerFactory(KafkaProperties kafkaProperties,
+            KafkaConnectionDetails connectionDetails) {
         Map<String, Object> config = kafkaProperties.buildProducerProperties(null);
+        config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, connectionDetails.getProducer().getBootstrapServers());
         config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class);
         config.put("schema.registry.url", schemaRegistryUrl);
         return new DefaultKafkaProducerFactory<>(config);
@@ -58,8 +61,10 @@ class KafkaConfig {
     }
 
     @Bean
-    public ConsumerFactory<String, SpecificRecord> consumerFactory(KafkaProperties kafkaProperties) {
+    public ConsumerFactory<String, SpecificRecord> consumerFactory(KafkaProperties kafkaProperties,
+            KafkaConnectionDetails connectionDetails) {
         Map<String, Object> config = kafkaProperties.buildConsumerProperties(null);
+        config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, connectionDetails.getConsumer().getBootstrapServers());
         config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
         config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         config.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);

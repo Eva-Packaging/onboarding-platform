@@ -5,6 +5,8 @@ import org.apache.avro.specific.SpecificRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -60,6 +62,7 @@ class GithubProvisioningIntegrationTest {
         registry.add("github.api.base-url", wireMock::baseUrl);
     }
 
+    @Autowired private ObjectMapper objectMapper;
     @Autowired private KafkaTemplate<String, SpecificRecord> kafkaTemplate;
     @Autowired private ProvisioningAuditLogRepository auditLogRepository;
     @Autowired private OutboxEventRepository outboxEventRepository;
@@ -100,9 +103,9 @@ class GithubProvisioningIntegrationTest {
         OutboxEvent outbox = outboxRows.getFirst();
         assertThat(outbox.getEventType()).isEqualTo("GithubProvisioningCompletedV1");
         assertThat(outbox.getTopic()).isEqualTo("edu.provisioning.github.v1");
-        assertThat(outbox.getPayload())
-                .contains("\"membershipState\":\"ACTIVE\"")
-                .contains("\"success\":true");
+        JsonNode payload = objectMapper.readTree(outbox.getPayload());
+        assertThat(payload.path("membershipState").asText()).isEqualTo("ACTIVE");
+        assertThat(payload.path("success").asBoolean()).isTrue();
     }
 
     private GithubProvisioningRequestedV1 githubProvisioningEvent() {

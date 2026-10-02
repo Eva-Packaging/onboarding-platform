@@ -5,6 +5,7 @@ import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.kafka.KafkaConnectionDetails;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -33,8 +34,10 @@ class KafkaConfig {
     }
 
     @Bean
-    public ProducerFactory<String, SpecificRecord> producerFactory(KafkaProperties kafkaProperties) {
+    public ProducerFactory<String, SpecificRecord> producerFactory(KafkaProperties kafkaProperties,
+            KafkaConnectionDetails connectionDetails) {
         Map<String, Object> config = kafkaProperties.buildProducerProperties(null);
+        config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, connectionDetails.getProducer().getBootstrapServers());
         config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class);
         return new DefaultKafkaProducerFactory<>(config);
     }

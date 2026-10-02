@@ -34,12 +34,12 @@ class OnboardingRequestStateResolverTest {
     }
 
     @Test
-    void anyPendingExternalAcceptance_resolveToInProgress() {
+    void anyPendingExternalAcceptance_resolveToActionRequired() {
         List<OnboardingStep> steps = List.of(
             stepWith(OnboardingStepState.PENDING_EXTERNAL_ACCEPTANCE),
             stepWith(OnboardingStepState.SUCCEEDED)
         );
-        assertThat(resolver.resolve(steps)).isEqualTo(OnboardingRequestState.IN_PROGRESS);
+        assertThat(resolver.resolve(steps)).isEqualTo(OnboardingRequestState.ACTION_REQUIRED);
     }
 
     @Test

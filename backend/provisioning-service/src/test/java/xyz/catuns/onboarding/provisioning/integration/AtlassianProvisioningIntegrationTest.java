@@ -5,6 +5,7 @@ import org.apache.avro.specific.SpecificRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -52,6 +53,7 @@ class AtlassianProvisioningIntegrationTest {
         registry.add("atlassian.api.base-url", wireMock::baseUrl);
     }
 
+    @Autowired private ObjectMapper objectMapper;
     @Autowired private KafkaTemplate<String, SpecificRecord> kafkaTemplate;
     @Autowired private ProvisioningAuditLogRepository auditLogRepository;
     @Autowired private OutboxEventRepository outboxEventRepository;
@@ -86,14 +88,14 @@ class AtlassianProvisioningIntegrationTest {
         ProvisioningAuditLog auditLog = auditLogRepository.findAll().getFirst();
         assertThat(auditLog.getActionName()).isEqualTo("ATLASSIAN_PROVISION");
         assertThat(auditLog.getResultState()).isEqualTo(ResultState.SUCCESS);
-        assertThat(auditLog.getResponsePayload()).contains("\"membershipState\":\"ACTIVE\"");
+        assertThat(objectMapper.readTree(auditLog.getResponsePayload()).path("membershipState").asText()).isEqualTo("ACTIVE");
 
         List<OutboxEvent> outboxRows = outboxEventRepository.findByPublishedFalseOrderByCreatedAtAsc();
         assertThat(outboxRows).hasSize(1);
         OutboxEvent outbox = outboxRows.getFirst();
         assertThat(outbox.getEventType()).isEqualTo("AtlassianProvisioningCompletedV1");
         assertThat(outbox.getTopic()).isEqualTo("edu.provisioning.atlassian.v1");
-        assertThat(outbox.getPayload()).contains("\"success\":true");
+        assertThat(objectMapper.readTree(outbox.getPayload()).path("success").asBoolean()).isTrue();
     }
 
     private AtlassianProvisioningRequestedV1 atlassianProvisioningEvent() {

@@ -23,3 +23,7 @@ spring:
   kafka:
     properties:
       schema-registry-url: mock://test
+    consumer:
+      # Each test context starts its own listener; without this it can join after the
+      # test has already published and skip the message (default is "latest").
+      auto-offset-reset: earliest
