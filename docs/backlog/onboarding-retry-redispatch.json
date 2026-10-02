@@ -1,0 +1,62 @@
+{
+  "summary": "Re-dispatch provisioning events when onboarding steps are retried",
+  "description": "POST /api/v1/onboarding/{requestId}/retry currently only transitions the requested steps from FAILED or MANUAL_REVIEW back to PENDING in <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/service/OnboardingRetryService.java>. Nothing re-dispatches a PENDING step afterwards: dispatch only happens inside OnboardingEventService.handleUserRegistered in <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/service/OnboardingEventService.java>, which runs once per UserRegisteredV1 event. As a result the endpoint returns 202 but the step never leaves PENDING and no provider call is made, so the Phase 6 exit criterion 'failed provisioning can be retried' is not met end to end (the same gap affects GITHUB_TEAM_PROVISIONING and IDENTITY_CORRELATION). The dispatch builders (buildIdentityCorrelationOutbox, buildGithubOutbox, buildAtlassianOutbox) depend on the original UserRegisteredV1 event for githubUserId, githubLogin, and primaryEmail, which onboarding-service does not persist. This story extracts step dispatch into a reusable component driven by a small dispatch context, rebuilds that context on retry from the user-service internal API added in Phase 6 (GET /api/v1/internal/external-identities?provider=GITHUB&userProfileId=...), and writes the provider request events to the outbox in the same transaction as the step transition. Calling user-service synchronously from the retry handler is allowed; GitHub and Atlassian are still only called asynchronously by provisioning-service.",
+  "labels": [
+    "onboarding-service",
+    "retry",
+    "outbox",
+    "kafka",
+    "phase-6",
+    "provisioning"
+  ],
+  "priority": "High",
+  "storyPoints": 5,
+  "acceptanceCriteria": [
+    {
+      "scenario": "Retrying a failed Jira step re-dispatches Atlassian provisioning",
+      "given": "an onboarding request whose JIRA_GROUP_PROVISIONING step is FAILED and whose user has a GitHub external_identity with a non-null email in user-service",
+      "when": "POST /api/v1/onboarding/{requestId}/retry is called with steps [\"JIRA_GROUP_PROVISIONING\"]",
+      "then": "the response is 202 with state IN_PROGRESS, the step transitions to PROCESSING with attempt_count incremented, and an outbox_event row with eventType AtlassianProvisioningRequestedV1, topic edu.provisioning.atlassian.v1, the step's providerTarget groupName, and atlassianEmail equal to the user's email is written in the same transaction"
+    },
+    {
+      "scenario": "Retrying GitHub and identity correlation steps re-dispatches their events",
+      "given": "an onboarding request whose GITHUB_TEAM_PROVISIONING and IDENTITY_CORRELATION steps are FAILED",
+      "when": "POST /api/v1/onboarding/{requestId}/retry is called with both step keys",
+      "then": "both steps transition to PROCESSING and outbox_event rows are written for GithubProvisioningRequestedV1 (with the user's githubLogin and the target's org and team slug) and IdentityCorrelationRequestedV1 (with githubUserId, githubLogin, and primaryEmail)"
+    },
+    {
+      "scenario": "Retried step reaches a terminal state from the completion event",
+      "given": "a JIRA_GROUP_PROVISIONING step was retried and provisioning-service publishes AtlassianProvisioningCompletedV1 with success true",
+      "when": "onboarding-service consumes the completion event",
+      "then": "the step transitions to SUCCEEDED and, if every step is now SUCCEEDED, an OnboardingCompletedV1 lifecycle event is written to the outbox"
+    },
+    {
+      "scenario": "User-service unavailable leaves the request unchanged",
+      "given": "user-service is unreachable or returns 404 for the user's GitHub identity",
+      "when": "POST /api/v1/onboarding/{requestId}/retry is called",
+      "then": "the response is 503 in the standard error envelope, the transaction rolls back so the steps remain FAILED, and no outbox_event rows are written"
+    }
+  ],
+  "tasks": [
+    {
+      "summary": "Extract step dispatch into OnboardingStepDispatcher",
+      "description": "Move the per-step switch and the buildIdentityCorrelationOutbox, buildGithubOutbox, and buildAtlassianOutbox helpers out of <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/service/OnboardingEventService.java> into a new OnboardingStepDispatcher in the same package. Its dispatch(OnboardingStep, StepDispatchContext, String correlationId) method transitions the step to PROCESSING and saves the outbox row. StepDispatchContext is a record (userId, githubUserId, githubLogin, primaryEmail). handleUserRegistered builds the context from UserRegisteredV1 and calls the dispatcher, keeping its existing PENDING-only guard and current behaviour."
+    },
+    {
+      "summary": "Return username from the internal external-identity lookup",
+      "description": "Add a username field (sourced from external_identity.username) to ExternalIdentityLookupResponse in <backend/user-service/src/main/java/xyz/catuns/onboarding/user/api/InternalIdentityController.java> and to the client record in <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/client/ExternalIdentityLookupResponse.java>. The change is additive, so existing callers such as IdentityCorrelationService are unaffected."
+    },
+    {
+      "summary": "Re-dispatch requested steps in OnboardingRetryService",
+      "description": "In <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/service/OnboardingRetryService.java>, after validating the steps, call UserServiceFeignClient.getGithubIdentityByUserProfileId(request.getUserProfileId()) to build a StepDispatchContext (githubUserId = accountId, githubLogin = username, primaryEmail = email). Transition each step to PENDING and then pass it to OnboardingStepDispatcher, all in the existing @Transactional method. Move the request state back to IN_PROGRESS, adding the FAILED/PARTIAL_SUCCESS to IN_PROGRESS transition to the request state rules if it is missing, and return the real state in OnboardingRetryResponse."
+    },
+    {
+      "summary": "Map user-service failures to 503 and update the API reference",
+      "description": "Translate FeignException raised during retry into a new UpstreamUnavailableException, and handle it in <backend/onboarding-service/src/main/java/xyz/catuns/onboarding/service/api/GlobalExceptionHandler.java> as a 503 in the standard error envelope. Add the 503 case to the retry section's error handling in <docs/schemas/rest-api-reference.md>, and note in <docs/request-flow.md> that a retry re-publishes the provider request event through the outbox."
+    },
+    {
+      "summary": "Add unit tests for retry re-dispatch",
+      "description": "Extend <backend/onboarding-service/src/test/java/xyz/catuns/onboarding/service/service/OnboardingRetryServiceTest.java> to cover re-dispatch of JIRA_GROUP_PROVISIONING, GITHUB_TEAM_PROVISIONING, and IDENTITY_CORRELATION (asserting outbox eventType, topic, and payload fields), the request state returning to IN_PROGRESS, and the 503 rollback path with a mocked UserServiceFeignClient. Add an OnboardingStepDispatcherTest, and confirm <backend/onboarding-service/src/test/java/xyz/catuns/onboarding/service/service/OnboardingEventServiceTest.java> still passes after the refactor."
+    }
+  ]
+}
