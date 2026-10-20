@@ -224,8 +224,9 @@ services:
     image: grafana/promtail:3.5.0
     hostname: promtail
     volumes:
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Logs are read via the Docker API (docker_sd_configs), so only the socket is needed.
+      # Rootless Docker: set DOCKER_SOCK in .env (e.g. $XDG_RUNTIME_DIR/docker.sock).
+      - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock:ro
       - ./infra/promtail/promtail.yml:/etc/promtail/config.yml:ro
     command: -config.file=/etc/promtail/config.yml
     networks:
