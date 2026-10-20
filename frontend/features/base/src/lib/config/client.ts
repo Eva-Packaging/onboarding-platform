@@ -1,6 +1,6 @@
 import { ApiClient, type ApiResponse, ApiError } from '@next-feature/client';
 import { BACKEND_API_URL } from './env';
-import { logger } from '@feature/logging/server';
+import { logger } from '@next-feature/logging/server';
 const json = require('../../../package.json');
 
 const log = logger.child({ module: 'base-client' });

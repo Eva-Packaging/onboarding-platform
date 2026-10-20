@@ -8,7 +8,7 @@ import type { GetOnboardingStatusResponse } from '@feature/base/server';
 import OnboardingStatusBanner from './OnboardingStatusBanner';
 import StepList from './StepList';
 import CorrelationIdBadge from './CorrelationIdBadge';
-import { logger } from '@feature/logging';
+import { logger } from '@next-feature/logging';
 
 const log = logger.child({ module: 'OnboardingPoller' });
 

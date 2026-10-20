@@ -1,4 +1,4 @@
-import { pinoOptions } from '@feature/logging/config';
+import { pinoOptions } from '@next-feature/logging/server';
 
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
