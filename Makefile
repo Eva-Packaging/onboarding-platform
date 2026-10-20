@@ -34,7 +34,7 @@ help:
 	@echo "  make test                   Run tests for all services"
 	@echo "  make clean                  Clean all services"
 	@echo ""
-	@echo "Docker (Spring Boot Buildpacks):"
+	@echo "Docker (backend/<service>/Dockerfile):"
 	@echo "  make docker-build           Build Docker images locally"
 	@echo "  make docker-push            Build and push images to Artifact Registry"
 	@echo ""

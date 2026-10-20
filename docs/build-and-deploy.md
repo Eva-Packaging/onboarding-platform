@@ -7,7 +7,7 @@ and its supporting scripts under `scripts/`.
 
 ```
 make build / test          → Maven (per service, via mvnw)
-make docker-build / push   → scripts/docker/build-images.sh  (Spring Boot Buildpacks → Artifact Registry)
+make docker-build / push   → scripts/docker/build-images.sh  (Dockerfiles → Artifact Registry)
 make deploy                → scripts/gcloud/deploy-service.sh (Cloud Run)
 ```
 
@@ -88,21 +88,30 @@ message if `GCP_PROJECT_ID`, `GCP_REGION`, or `GCP_REPOSITORY` are unset.
 ## scripts/docker/build-images.sh
 
 Builds (and optionally pushes) container images for the four backend services
-using Spring Boot Buildpacks (`./mvnw spring-boot:build-image`). Configuration
-is loaded from `.env` and can be overridden with flags.
+from each service's Dockerfile (`backend/<service>/Dockerfile`). Every build uses
+`backend/` as its context so the Dockerfile can build and install the shared
+`onboarding-common` SNAPSHOT before the service itself. Configuration is loaded
+from `.env` and can be overridden with flags.
+
+`docker-compose.yml` points at the same Dockerfiles and image names, so
+`docker compose build && docker compose push` works as a quick alternative for
+`:latest`.
 
 ```bash
 ./scripts/docker/build-images.sh                          # build all
 ./scripts/docker/build-images.sh --push                   # build + push all
 ./scripts/docker/build-images.sh --push user-service      # single service
 ./scripts/docker/build-images.sh --tag v1.2.0 api-gateway # custom tag
+./scripts/docker/build-images.sh --platform linux/arm64   # local ARM build
 ```
 
 For each service it:
 1. Reads the project version from `pom.xml` (`./mvnw help:evaluate -Dexpression=project.version`).
-2. Builds `<region>-docker.pkg.dev/<project>/<repository>/<service>:<version>` via Buildpacks.
-3. Tags it with an additional tag (default `latest`).
-4. With `--push`, pushes both tags to Artifact Registry (run
+2. Runs `docker build --platform linux/amd64 -f backend/<service>/Dockerfile backend/`,
+   tagging `<region>-docker.pkg.dev/<project>/<repository>/<service>:<version>` plus an
+   additional tag (default `latest`). The platform defaults to `linux/amd64` (required
+   by Cloud Run); override with `--platform` or `DOCKER_PLATFORM`.
+3. With `--push`, pushes both tags to Artifact Registry (run
    `gcloud auth configure-docker <registry>` first if push fails).
 
 ## scripts/gcloud/bootstrap-project.sh

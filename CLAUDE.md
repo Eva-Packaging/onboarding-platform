@@ -91,8 +91,8 @@ Each Spring Boot service connects to its own database. Services register with Co
 
 ## Build, image & deploy commands
 
-The root `Makefile` wraps Maven builds, Docker image builds (Spring Boot
-Buildpacks → GCP Artifact Registry), and Cloud Run deploys. It loads
+The root `Makefile` wraps Maven builds, Docker image builds (each
+service's `backend/<service>/Dockerfile` → GCP Artifact Registry), and Cloud Run deploys. It loads
 configuration from `.env` (`GCP_PROJECT_ID`, `GCP_REGION`, `GCP_REPOSITORY`, …) —
 copy `.env.example` to `.env` and fill in values first. Full details: `docs/build-and-deploy.md`.
 
@@ -101,7 +101,7 @@ copy `.env.example` to `.env` and fill in values first. Full details: `docs/buil
 make build / test / clean              # all 4 services; or build-<service> / test-<service>
 
 # Docker images (delegates to scripts/docker/build-images.sh)
-make docker-build                      # build locally with Buildpacks
+make docker-build                      # build locally from backend/<service>/Dockerfile
 make docker-push                       # build + push to Artifact Registry
 make docker-push-user-service          # single service (also: users/onboarding/provisioning/apigw shortcuts)
 
