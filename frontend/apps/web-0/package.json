@@ -1,0 +1,10 @@
+{
+  "name": "@app/web",
+  "version": "0.0.1",
+  "private": true,
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.1",
+    "postcss": "^8.5",
+    "tailwindcss": "^4.1"
+  }
+}
