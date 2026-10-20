@@ -2,6 +2,9 @@ name: onboarding
 services:
   api-gateway:
     image: ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_REPOSITORY}/api-gateway:latest
+    build:
+      context: ./backend
+      dockerfile: api-gateway/Dockerfile
     ports:
       - "8080:8080"
     environment:
@@ -17,6 +20,9 @@ services:
 
   user-service:
     image: ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_REPOSITORY}/user-service:latest
+    build:
+      context: ./backend
+      dockerfile: user-service/Dockerfile
     environment:
       SPRING_PROFILES_ACTIVE: docker
       JWT_SECRET: ${JWT_SECRET}
@@ -34,6 +40,9 @@ services:
 
   onboarding-service:
     image: ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_REPOSITORY}/onboarding-service:latest
+    build:
+      context: ./backend
+      dockerfile: onboarding-service/Dockerfile
     environment:
       SPRING_PROFILES_ACTIVE: docker
       JWT_SECRET: ${JWT_SECRET}
@@ -51,6 +60,9 @@ services:
 
   provisioning-service:
     image: ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_REPOSITORY}/provisioning-service:latest
+    build:
+      context: ./backend
+      dockerfile: provisioning-service/Dockerfile
     environment:
       SPRING_PROFILES_ACTIVE: docker
       JWT_SECRET: ${JWT_SECRET}

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build (and optionally push) Docker images for all backend services using
-# Spring Boot Buildpacks.
+# each service's Dockerfile (backend/<service>/Dockerfile, build context backend/).
 #
 # Configuration is read from .env at the repo root; every value can be
 # overridden with the flags below.
@@ -14,6 +14,7 @@
 #   --registry REG      Override GCP_REGION-docker.pkg.dev
 #   --project PROJ      Override GCP_PROJECT_ID
 #   --repository REPO   Override GCP_REPOSITORY
+#   --platform PLAT     Target platform (default: DOCKER_PLATFORM or linux/amd64)
 #   --help              Show this help message
 #
 # Services (default: all):
@@ -27,6 +28,7 @@
 #   ./scripts/docker/build-images.sh --push                   # build + push all
 #   ./scripts/docker/build-images.sh --push user-service      # single service
 #   ./scripts/docker/build-images.sh --tag v1.2.0 api-gateway # custom tag
+#   ./scripts/docker/build-images.sh --platform linux/arm64   # local ARM build
 
 set -euo pipefail
 
@@ -56,6 +58,8 @@ REGISTRY="${GCP_REGION:+${GCP_REGION}-docker.pkg.dev}"
 REGISTRY="${REGISTRY:-us-central1-docker.pkg.dev}"
 PROJECT="${GCP_PROJECT_ID:-}"
 REPOSITORY="${GCP_REPOSITORY:-}"
+# Cloud Run only runs linux/amd64 images
+PLATFORM="${DOCKER_PLATFORM:-linux/amd64}"
 PUSH=false
 ADDITIONAL_TAG="latest"
 
@@ -68,7 +72,7 @@ ALL_SERVICES=(
 SERVICES_TO_BUILD=()
 
 # ── Arg parsing ───────────────────────────────────────────────────────────────
-show_help() { sed -n '4,29p' "$0" | sed 's/^# \?//'; exit 0; }
+show_help() { sed -n '4,31p' "$0" | sed 's/^# \?//'; exit 0; }
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -77,6 +81,7 @@ while [[ $# -gt 0 ]]; do
         --registry)   REGISTRY="$2"; shift 2 ;;
         --project)    PROJECT="$2"; shift 2 ;;
         --repository) REPOSITORY="$2"; shift 2 ;;
+        --platform)   PLATFORM="$2"; shift 2 ;;
         --help)       show_help ;;
         -*)           print_error "Unknown option: $1"; show_help ;;
         *)
@@ -127,6 +132,9 @@ build_service_image() {
     if [[ ! -d "$service_dir" ]]; then
         print_error "Service directory not found: ${service_dir}"; return 1
     fi
+    if [[ ! -f "${service_dir}/Dockerfile" ]]; then
+        print_error "Dockerfile not found in ${service_dir}"; return 1
+    fi
 
     print_info "Building ${service}..."
 
@@ -141,16 +149,22 @@ build_service_image() {
     local versioned_image="${base_image}:${version}"
     print_info "Image: ${versioned_image}"
 
-    cd "$service_dir"
-    if ! ./mvnw -Dimage.name="${versioned_image}" spring-boot:build-image -DskipTests; then
+    local tag_args=(-t "${versioned_image}")
+    if [[ "$ADDITIONAL_TAG" != "$version" ]]; then
+        tag_args+=(-t "${base_image}:${ADDITIONAL_TAG}")
+    fi
+
+    # Context is backend/ so the Dockerfile can build the shared common module
+    if ! docker build \
+            --platform "${PLATFORM}" \
+            -f "${service_dir}/Dockerfile" \
+            "${tag_args[@]}" \
+            "${BACKEND_DIR}"; then
         print_error "Build failed for ${service}"; return 1
     fi
     print_success "Built ${versioned_image}"
-
     if [[ "$ADDITIONAL_TAG" != "$version" ]]; then
-        local tagged_image="${base_image}:${ADDITIONAL_TAG}"
-        docker tag "${versioned_image}" "${tagged_image}"
-        print_success "Tagged as ${tagged_image}"
+        print_success "Tagged as ${base_image}:${ADDITIONAL_TAG}"
     fi
 
     if [[ "$PUSH" == true ]]; then
@@ -177,6 +191,7 @@ print_info "Onboarding Platform Image Builder"
 print_info "Registry:   ${REGISTRY}/${PROJECT}/${REPOSITORY}"
 print_info "Services:   ${SERVICES_TO_BUILD[*]}"
 print_info "Extra tag:  ${ADDITIONAL_TAG}"
+print_info "Platform:   ${PLATFORM}"
 print_info "Push:       ${PUSH}"
 echo ""
 
