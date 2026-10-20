@@ -6,3 +6,6 @@ allowBuilds:
   sharp: true
   unrs-resolver: true
 autoInstallPeers: true
+minimumReleaseAgeExclude:
+  - 'next-feature'
+  - '@next-feature/*'

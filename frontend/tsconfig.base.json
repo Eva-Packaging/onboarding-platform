@@ -10,26 +10,66 @@
     "importHelpers": true,
     "target": "es2015",
     "module": "esnext",
-    "lib": ["es2020", "dom"],
+    "lib": [
+      "es2020",
+      "dom"
+    ],
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@app/web/*": ["apps/web/*"],
-      "@feature/auth/*": ["features/auth/src/*"],
-      "@feature/base": ["features/base/src/index.ts"],
-      "@feature/base/server": ["features/base/src/server.ts"],
-      "@feature/base/*": ["features/base/src/*"],
-      "@client/api-client": ["clients/api-client/src/index.ts"],
-      "@client/api-client/server": ["clients/api-client/src/server.ts"],
-      "@client/api-client/*": ["clients/api-client/src/*"],
-      "@feature/logging": ["features/logging/src/index.ts"],
-      "@feature/logging/server": ["features/logging/src/server.ts"],
-      "@feature/logging/config": ["features/logging/src/config.ts"],
-      "@feature/logging/*": ["features/logging/src/*"],
-      "@onboarding-frontend/auth-0": ["features/auth-0/src/index.ts"],
-      "@onboarding-frontend/auth-0/server": ["apps/auth-0/src/server.ts"]
+      "@feature/base": [
+        "features/base/src/index.ts"
+      ],
+      "@feature/base/server": [
+        "features/base/src/server.ts"
+      ],
+      "@feature/base/*": [
+        "features/base/src/*"
+      ],
+      "@client/api-client": [
+        "clients/api-client/src/index.ts"
+      ],
+      "@client/api-client/server": [
+        "clients/api-client/src/server.ts"
+      ],
+      "@client/api-client/*": [
+        "clients/api-client/src/*"
+      ],
+      "@feature/logging": [
+        "features/logging/src/index.ts"
+      ],
+      "@feature/logging/server": [
+        "features/logging/src/server.ts"
+      ],
+      "@feature/logging/config": [
+        "features/logging/src/config.ts"
+      ],
+      "@feature/logging/*": [
+        "features/logging/src/*"
+      ],
+      "@onboarding-frontend/auth-0": [
+        "features/auth-0/src/index.ts"
+      ],
+      "@onboarding-frontend/auth-0/server": [
+        "apps/auth-0/src/server.ts"
+      ],
+      "@app/web/*": [
+        "apps/web/*"
+      ],
+      "@feature/auth": [
+        "features/auth/src/index.ts"
+      ],
+      "@feature/auth/server": [
+        "features/auth/src/server.ts"
+      ],
+      "@feature/auth/*": [
+        "features/auth/src/*"
+      ]
     }
   },
-  "exclude": ["node_modules", "tmp"]
+  "exclude": [
+    "node_modules",
+    "tmp"
+  ]
 }
