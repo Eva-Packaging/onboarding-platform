@@ -1,4 +1,4 @@
-import { ApiClient, type ApiResponse, ApiError } from '@client/api-client';
+import { ApiClient, type ApiResponse, ApiError } from '@next-feature/client';
 import { BACKEND_API_URL } from './env';
 import { logger } from '@feature/logging/server';
 const json = require('../../../package.json');
