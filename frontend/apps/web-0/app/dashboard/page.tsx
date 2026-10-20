@@ -1,4 +1,4 @@
-import { auth } from '@feature/auth';
+import { auth } from '@onboarding-frontend/auth-0';
 import { redirect } from 'next/navigation';
 
 interface Props {

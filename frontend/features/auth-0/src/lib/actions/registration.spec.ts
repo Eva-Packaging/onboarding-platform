@@ -1,8 +1,6 @@
-
 import api from '../config/client';
 import { registerUser, type RegisterUserResponse } from './registration';
 import { registerUserSchema } from '../types/schema';
-
 
 jest.mock('@next-feature/client/server', () => ({
   withApi: (fn: (...args: unknown[]) => unknown) => fn,
@@ -65,13 +63,17 @@ describe('registerUserSchema', () => {
 
   it('rejects an invalid email format', () => {
     expect(
-      registerUserSchema.safeParse({ ...validPayload, primaryEmail: 'not-an-email' }).success
+      registerUserSchema.safeParse({
+        ...validPayload,
+        primaryEmail: 'not-an-email',
+      }).success,
     ).toBe(false);
   });
 
   it('rejects an invalid avatar URL', () => {
     expect(
-      registerUserSchema.safeParse({ ...validPayload, avatarUrl: 'not-a-url' }).success
+      registerUserSchema.safeParse({ ...validPayload, avatarUrl: 'not-a-url' })
+        .success,
     ).toBe(false);
   });
 });
@@ -82,7 +84,10 @@ describe('registerUser', () => {
 
     const result = await registerUser(validPayload);
 
-    expect(mockPost).toHaveBeenCalledWith('/api/v1/users/registrations', validPayload);
+    expect(mockPost).toHaveBeenCalledWith(
+      '/api/v1/users/registrations',
+      validPayload,
+    );
     expect(result).toEqual(mockResponse);
   });
 
@@ -98,11 +103,16 @@ describe('registerUser', () => {
 
     await registerUser(payload);
 
-    expect(mockPost).toHaveBeenCalledWith('/api/v1/users/registrations', payload);
+    expect(mockPost).toHaveBeenCalledWith(
+      '/api/v1/users/registrations',
+      payload,
+    );
   });
 
   it('throws when schema validation fails', async () => {
-    await expect(registerUser({ githubUserId: '', githubLogin: '', displayName: '' })).rejects.toThrow();
+    await expect(
+      registerUser({ githubUserId: '', githubLogin: '', displayName: '' }),
+    ).rejects.toThrow();
     expect(mockPost).not.toHaveBeenCalled();
   });
 

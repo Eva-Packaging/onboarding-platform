@@ -16,8 +16,6 @@
     "baseUrl": ".",
     "paths": {
       "@app/web/*": ["apps/web/*"],
-      "@feature/auth": ["features/auth/src/index.ts"],
-      "@feature/auth/server": ["features/auth/src/server.ts"],
       "@feature/auth/*": ["features/auth/src/*"],
       "@feature/base": ["features/base/src/index.ts"],
       "@feature/base/server": ["features/base/src/server.ts"],
@@ -28,7 +26,9 @@
       "@feature/logging": ["features/logging/src/index.ts"],
       "@feature/logging/server": ["features/logging/src/server.ts"],
       "@feature/logging/config": ["features/logging/src/config.ts"],
-      "@feature/logging/*": ["features/logging/src/*"]
+      "@feature/logging/*": ["features/logging/src/*"],
+      "@onboarding-frontend/auth-0": ["features/auth-0/src/index.ts"],
+      "@onboarding-frontend/auth-0/server": ["apps/auth-0/src/server.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]

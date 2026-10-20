@@ -9,5 +9,7 @@ export interface TokenResponse {
 }
 
 export const exchangeToken = withApi(async (githubAccessToken: string) => {
-  return api.post<TokenResponse>('/api/v1/users/auth/token', { githubAccessToken });
+  return api.post<TokenResponse>('/api/v1/users/auth/token', {
+    githubAccessToken,
+  });
 }, {});

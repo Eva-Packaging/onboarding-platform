@@ -1,8 +1,15 @@
 {
-  "name": "auth",
+  "name": "auth-0",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "features/auth/src",
+  "sourceRoot": "features/auth-0/src",
   "projectType": "library",
+  "release": {
+    "version": {
+      "manifestRootsToUpdate": ["dist/{projectRoot}"],
+      "currentVersionResolver": "git-tag",
+      "fallbackCurrentVersionResolver": "disk"
+    }
+  },
   "tags": [],
   "targets": {
     "lint": {
@@ -13,7 +20,7 @@
       "outputs": ["{options.outputPath}"],
       "defaultConfiguration": "production",
       "options": {
-        "outputPath": "dist/features/auth"
+        "outputPath": "dist/features/auth-0"
       },
       "configurations": {
         "development": {
@@ -28,20 +35,13 @@
       "executor": "@nx/jest:jest",
       "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
       "options": {
-        "jestConfig": "features/auth/jest.config.cts"
+        "jestConfig": "features/auth-0/jest.config.cts"
       }
     },
     "nx-release-publish": {
       "options": {
         "packageRoot": "dist/{projectRoot}"
       }
-    }
-  },
-  "release": {
-    "version": {
-      "manifestRootsToUpdate": ["dist/{projectRoot}"],
-      "currentVersionResolver": "git-tag",
-      "fallbackCurrentVersionResolver": "disk"
     }
   }
 }

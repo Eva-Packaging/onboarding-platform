@@ -27,5 +27,8 @@ export const registerUser = withApi(async (request: RegisterUserRequest) => {
     throw parsed.error;
   }
 
-  return api.post<RegisterUserResponse>('/api/v1/users/registrations', parsed.data);
+  return api.post<RegisterUserResponse>(
+    '/api/v1/users/registrations',
+    parsed.data,
+  );
 }, {});

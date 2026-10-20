@@ -11,8 +11,12 @@ jest.mock('../actions/token', () => ({
 import { registerUser } from '../actions/registration';
 import { exchangeToken } from '../actions/token';
 
-const mockRegisterUser = registerUser as jest.MockedFunction<typeof registerUser>;
-const mockExchangeToken = exchangeToken as jest.MockedFunction<typeof exchangeToken>;
+const mockRegisterUser = registerUser as jest.MockedFunction<
+  typeof registerUser
+>;
+const mockExchangeToken = exchangeToken as jest.MockedFunction<
+  typeof exchangeToken
+>;
 
 const baseToken = { sub: 'user-123', iat: 0, exp: 0, jti: '' };
 
@@ -91,7 +95,11 @@ describe('jwtCallback — github identity mapping', () => {
   it('does not set github fields when provider is not github', async () => {
     const result = await jwtCallback({
       token: { ...baseToken },
-      account: { provider: 'credentials', type: 'credentials', providerAccountId: 'cred' },
+      account: {
+        provider: 'credentials',
+        type: 'credentials',
+        providerAccountId: 'cred',
+      },
       profile: undefined,
     });
 
@@ -101,9 +109,17 @@ describe('jwtCallback — github identity mapping', () => {
   });
 
   it('does not modify token when account is null', async () => {
-    const token = { ...baseToken, githubId: 'existing-id', githubLogin: 'existing-login' };
+    const token = {
+      ...baseToken,
+      githubId: 'existing-id',
+      githubLogin: 'existing-login',
+    };
 
-    const result = await jwtCallback({ token, account: null, profile: undefined });
+    const result = await jwtCallback({
+      token,
+      account: null,
+      profile: undefined,
+    });
 
     expect(result.githubId).toBe('existing-id');
     expect(mockRegisterUser).not.toHaveBeenCalled();
@@ -144,13 +160,16 @@ describe('jwtCallback — registration', () => {
     });
 
     expect(mockRegisterUser).toHaveBeenCalledWith(
-      expect.objectContaining({ displayName: 'student-dev' })
+      expect.objectContaining({ displayName: 'student-dev' }),
     );
   });
 
   it('does not call registerUser when onboardingRequestId is already set', async () => {
     mockExchangeToken.mockResolvedValue(makeTokenSuccess() as never);
-    const token = { ...baseToken, onboardingRequestId: 'existing-onboarding-uuid' };
+    const token = {
+      ...baseToken,
+      onboardingRequestId: 'existing-onboarding-uuid',
+    };
 
     const result = await jwtCallback({
       token,
@@ -163,7 +182,11 @@ describe('jwtCallback — registration', () => {
   });
 
   it('sets registrationError when the API returns a non-success response', async () => {
-    mockRegisterUser.mockResolvedValue({ success: false, data: null, error: {} } as never);
+    mockRegisterUser.mockResolvedValue({
+      success: false,
+      data: null,
+      error: {},
+    } as never);
     mockExchangeToken.mockResolvedValue(makeTokenSuccess() as never);
 
     const result = await jwtCallback({
@@ -206,7 +229,9 @@ describe('jwtCallback — backend token issuance', () => {
 
   it('stores backendToken and backendTokenExpiresAt on sign-in', async () => {
     mockRegisterUser.mockResolvedValue(makeRegistrationSuccess() as never);
-    mockExchangeToken.mockResolvedValue(makeTokenSuccess('my.jwt', 3600) as never);
+    mockExchangeToken.mockResolvedValue(
+      makeTokenSuccess('my.jwt', 3600) as never,
+    );
 
     const before = Date.now();
     const result = await jwtCallback({
@@ -217,13 +242,20 @@ describe('jwtCallback — backend token issuance', () => {
     const after = Date.now();
 
     expect(result.backendToken).toBe('my.jwt');
-    expect(result.backendTokenExpiresAt).toBeGreaterThanOrEqual(before + 3600 * 1000);
-    expect(result.backendTokenExpiresAt).toBeLessThanOrEqual(after + 3600 * 1000);
+    expect(result.backendTokenExpiresAt).toBeGreaterThanOrEqual(
+      before + 3600 * 1000,
+    );
+    expect(result.backendTokenExpiresAt).toBeLessThanOrEqual(
+      after + 3600 * 1000,
+    );
   });
 
   it('does not set backendToken when exchangeToken returns failure', async () => {
     mockRegisterUser.mockResolvedValue(makeRegistrationSuccess() as never);
-    mockExchangeToken.mockResolvedValue({ success: false, data: null } as never);
+    mockExchangeToken.mockResolvedValue({
+      success: false,
+      data: null,
+    } as never);
 
     const result = await jwtCallback({
       token: { ...baseToken },
@@ -237,7 +269,9 @@ describe('jwtCallback — backend token issuance', () => {
 
 describe('jwtCallback — backend token refresh', () => {
   it('refreshes backendToken when within 5 minutes of expiry', async () => {
-    mockExchangeToken.mockResolvedValue(makeTokenSuccess('refreshed.jwt') as never);
+    mockExchangeToken.mockResolvedValue(
+      makeTokenSuccess('refreshed.jwt') as never,
+    );
     const expiresAt = Date.now() + 4 * 60 * 1000; // 4 min from now — inside threshold
 
     const result = await jwtCallback({
@@ -305,7 +339,10 @@ describe('jwtCallback — backend token refresh', () => {
   });
 
   it('keeps existing backendToken when refresh call fails', async () => {
-    mockExchangeToken.mockResolvedValue({ success: false, data: null } as never);
+    mockExchangeToken.mockResolvedValue({
+      success: false,
+      data: null,
+    } as never);
     const expiresAt = Date.now() + 60 * 1000;
 
     const result = await jwtCallback({
@@ -326,7 +363,12 @@ describe('jwtCallback — backend token refresh', () => {
 describe('sessionCallback', () => {
   function makeSession(extra: Record<string, unknown> = {}) {
     return {
-      user: { name: 'Test User', email: 'test@example.com', image: null, ...extra },
+      user: {
+        name: 'Test User',
+        email: 'test@example.com',
+        image: null,
+        ...extra,
+      },
       expires: '2099-01-01T00:00:00.000Z',
     };
   }
@@ -341,7 +383,10 @@ describe('sessionCallback', () => {
       correlationId: 'correlation-uuid',
     };
 
-    const result = await sessionCallback({ session: makeSession() as never, token });
+    const result = await sessionCallback({
+      session: makeSession() as never,
+      token,
+    });
 
     expect(result.user.githubId).toBe('12345678');
     expect(result.user.githubLogin).toBe('student-dev');
@@ -353,7 +398,10 @@ describe('sessionCallback', () => {
   it('propagates backendToken to session user', async () => {
     const token = { ...baseToken, backendToken: 'signed.jwt.value' };
 
-    const result = await sessionCallback({ session: makeSession() as never, token });
+    const result = await sessionCallback({
+      session: makeSession() as never,
+      token,
+    });
 
     expect(result.user.backendToken).toBe('signed.jwt.value');
   });
@@ -361,7 +409,10 @@ describe('sessionCallback', () => {
   it('propagates registrationError flag to session user', async () => {
     const token = { ...baseToken, registrationError: true };
 
-    const result = await sessionCallback({ session: makeSession() as never, token });
+    const result = await sessionCallback({
+      session: makeSession() as never,
+      token,
+    });
 
     expect(result.user.registrationError).toBe(true);
   });

@@ -25,7 +25,7 @@ const apiClient = new ApiClient({
   },
   onAuthenticated: async (config) => {
     try {
-      const { auth } = await import('@feature/auth');
+      const { auth } = await import('@onboarding-frontend/auth-0');
       const session = await auth();
       const token = session?.user?.backendToken;
       if (token) {
@@ -34,7 +34,9 @@ const apiClient = new ApiClient({
     } catch {
       // Not in an authenticated server context (e.g., public endpoints)
     }
-    log.info(`${config.method.toUpperCase()} ${config.url} ${config.data ?? ''}`);
+    log.info(
+      `${config.method.toUpperCase()} ${config.url} ${config.data ?? ''}`,
+    );
   },
   onRefreshToken: async (originalRequest) => {
     return '';
