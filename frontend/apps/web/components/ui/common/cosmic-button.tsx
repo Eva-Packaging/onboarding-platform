@@ -82,7 +82,6 @@ export function CosmicButton<E extends "a" | "button" = "a">({
     return (
       <a
         className={baseClassName}
-        href={href ?? "https://aisdkagents.com"}
         rel={rel ?? "noopener noreferrer"}
         target={target ?? "_blank"}
         {...rest}

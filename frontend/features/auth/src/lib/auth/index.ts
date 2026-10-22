@@ -7,7 +7,9 @@ const nextAuth: NextAuthResult = NextAuth({
   providers: [
     // Zero-config OAuth providers — reads AUTH_<PROVIDER>_ID / AUTH_<PROVIDER>_SECRET
     // from the environment. Remove any providers you don't need.
-    GitHub
+    // GitHub returns `iss` on the callback (RFC 9207); without a matching issuer
+    // Auth.js validates against its "https://authjs.dev" fallback and rejects it.
+    GitHub({ issuer: 'https://github.com/login/oauth' }),
   ],
 });
 

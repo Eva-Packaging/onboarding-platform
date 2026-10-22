@@ -20,6 +20,9 @@ importers:
       '@paper-design/shaders':
         specifier: ^0.0.76
         version: 0.0.76
+      '@paper-design/shaders-react':
+        specifier: ^0.0.81
+        version: 0.0.81(@types/react@19.2.15)(react@19.2.6)
       '@radix-ui/react-slot':
         specifier: ^1.5.0
         version: 1.5.0(@types/react@19.2.15)(react@19.2.6)
@@ -77,6 +80,9 @@ importers:
       server-only:
         specifier: ^0.0.1
         version: 0.0.1
+      shadcn:
+        specifier: ^4.22.1
+        version: 4.22.1(babel-plugin-macros@3.1.0)
       sonner:
         specifier: 2.0.3
         version: 2.0.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -225,9 +231,6 @@ importers:
       prettier:
         specifier: ~3.6.2
         version: 3.6.2
-      shadcn:
-        specifier: ^4.22.1
-        version: 4.22.1(babel-plugin-macros@3.1.0)
       ts-jest:
         specifier: ^29.4.0
         version: 29.4.11(@babel/core@7.29.0)(@jest/transform@30.4.1)(@jest/types@30.4.1)(babel-jest@30.4.1(@babel/core@7.29.0))(jest-util@30.4.1)(jest@30.4.2(@types/node@20.19.9)(babel-plugin-macros@3.1.0)(ts-node@10.9.1(@swc/core@1.5.29(@swc/helpers@0.5.15))(@types/node@20.19.9)(typescript@5.9.3)))(typescript@5.9.3)
@@ -2285,8 +2288,20 @@ packages:
   '@panva/hkdf@1.2.1':
     resolution: {integrity: sha512-6oclG6Y3PiDFcoyk8srjLfVKyMfVCKJ27JwNPViuXziFpmdz+MZnZN/aKY0JGXgYuO/VghU0jcOAZgWXZ1Dmrw==}
 
+  '@paper-design/shaders-react@0.0.81':
+    resolution: {integrity: sha512-3FMkeZqj9sSvK/WkgekGu3crnOQd4R2iH8IT+jVBuQmq1m8p88VFvxh63s9bSt2exBwjBNaRfSo0FSCeNxqh3w==}
+    peerDependencies:
+      '@types/react': ^18 || ^19
+      react: ^18 || ^19
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+
   '@paper-design/shaders@0.0.76':
     resolution: {integrity: sha512-AcNDY4J66YQHUfQYFInkCP7M9VOje0od7wLpOR7LtCmc532opJy6ll+h1W9zBovz8tt9U7OADUmJ/qKEXyOX/A==}
+
+  '@paper-design/shaders@0.0.81':
+    resolution: {integrity: sha512-jeGdyjMscZ2bxmQdo8lhwUufHUf4iq3s1ayjh8PXU7Go42Rw8E3I0It1FZdc3HuWt5J82m//DRWaxsRqRfA4Gg==}
 
   '@parcel/watcher-android-arm64@2.5.6':
     resolution: {integrity: sha512-YQxSS34tPF/6ZG7r/Ih9xy+kP/WwediEUsqmtf0cuCV5TPPKw/PQHRhueUo6JdeFJaqV3pyjm0GdYjZotbRt/A==}
@@ -13121,7 +13136,16 @@ snapshots:
 
   '@panva/hkdf@1.2.1': {}
 
+  '@paper-design/shaders-react@0.0.81(@types/react@19.2.15)(react@19.2.6)':
+    dependencies:
+      '@paper-design/shaders': 0.0.81
+      react: 19.2.6
+    optionalDependencies:
+      '@types/react': 19.2.15
+
   '@paper-design/shaders@0.0.76': {}
+
+  '@paper-design/shaders@0.0.81': {}
 
   '@parcel/watcher-android-arm64@2.5.6':
     optional: true

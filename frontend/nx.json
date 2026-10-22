@@ -57,7 +57,8 @@
     },
     "next-feature": {
       "component": {
-        "projectName": "web"
+        "projectName": "web",
+        "inferPath": true
       },
       "declaration": {
         "projectName": "onboarding"

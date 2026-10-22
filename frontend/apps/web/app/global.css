@@ -127,3 +127,18 @@
     @apply font-serif;
     }
 }
+/* Used by components/ui/common/cosmic-button.tsx */
+@keyframes cosmic-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes cosmic-spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+@utility animate-cosmic-spin {
+  animation: cosmic-spin 3s linear infinite;
+}
+@utility animate-cosmic-spin-slow {
+  animation: cosmic-spin-slow 5s linear infinite;
+}
