@@ -3,8 +3,8 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { getOnboardingStatus } from '@feature/base/server';
-import type { GetOnboardingStatusResponse } from '@feature/base/server';
+import { getOnboardingStatus } from '../../app/onboarding/actions';
+import type { GetOnboardingStatusResponse } from '@feature/onboarding';
 import OnboardingStatusBanner from './OnboardingStatusBanner';
 import StepList from './StepList';
 import CorrelationIdBadge from './CorrelationIdBadge';

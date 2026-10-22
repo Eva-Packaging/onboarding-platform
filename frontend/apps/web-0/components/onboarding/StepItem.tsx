@@ -5,7 +5,7 @@ import {
   Loader2,
   AlertTriangle,
 } from 'lucide-react';
-import type { OnboardingStep } from '@feature/base/server';
+import type { OnboardingStep } from '@feature/onboarding';
 
 const STEP_LABELS: Record<string, string> = {
   IDENTITY_CORRELATION: 'Identity Verification',

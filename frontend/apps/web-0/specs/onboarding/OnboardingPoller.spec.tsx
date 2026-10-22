@@ -12,11 +12,11 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-jest.mock('@feature/base/server', () => ({
+jest.mock('../../app/onboarding/actions', () => ({
   getOnboardingStatus: jest.fn(),
 }));
 
-import { getOnboardingStatus } from '@feature/base/server';
+import { getOnboardingStatus } from '../../app/onboarding/actions';
 
 const mockGetOnboardingStatus = getOnboardingStatus as jest.MockedFunction<
   typeof getOnboardingStatus

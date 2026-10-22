@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import StepList from '../../components/onboarding/StepList';
-import type { OnboardingStep } from '@feature/base/server';
+import type { OnboardingStep } from '@feature/onboarding';
 
 const STEPS: OnboardingStep[] = [
   { type: 'IDENTITY_CORRELATION', state: 'SUCCEEDED' },

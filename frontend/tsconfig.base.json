@@ -15,15 +15,13 @@
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@feature/base": ["features/base/src/index.ts"],
-      "@feature/base/server": ["features/base/src/server.ts"],
-      "@feature/base/*": ["features/base/src/*"],
-      "@onboarding-frontend/auth-0": ["features/auth-0/src/index.ts"],
-      "@onboarding-frontend/auth-0/server": ["apps/auth-0/src/server.ts"],
       "@app/web/*": ["apps/web/*"],
       "@feature/auth": ["features/auth/src/index.ts"],
       "@feature/auth/server": ["features/auth/src/server.ts"],
-      "@feature/auth/*": ["features/auth/src/*"]
+      "@feature/auth/*": ["features/auth/src/*"],
+      "@feature/onboarding": ["features/onboarding/src/index.ts"],
+      "@feature/onboarding/server": ["features/onboarding/src/server.ts"],
+      "@feature/onboarding/*": ["features/onboarding/src/*"]
     }
   },
   "exclude": ["node_modules", "tmp"]

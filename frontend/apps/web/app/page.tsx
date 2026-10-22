@@ -6,8 +6,8 @@ interface Props {
 
 export default async function Index(props: Props) {
   return (
-    <main>
+    <div>
       Home
-    </main>
+    </div>
   );
 }

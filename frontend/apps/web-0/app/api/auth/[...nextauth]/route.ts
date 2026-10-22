@@ -1,2 +1,2 @@
-import { handlers } from '@onboarding-frontend/auth-0';
+import { handlers } from '@feature/auth/server';
 export const { GET, POST } = handlers;

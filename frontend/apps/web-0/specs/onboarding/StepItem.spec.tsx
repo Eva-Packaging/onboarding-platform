@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import StepItem from '../../components/onboarding/StepItem';
-import type { OnboardingStep } from '@feature/base/server';
+import type { OnboardingStep } from '@feature/onboarding';
 
 function makeStep(overrides: Partial<OnboardingStep> = {}): OnboardingStep {
   return {

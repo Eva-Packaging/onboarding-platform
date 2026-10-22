@@ -1,4 +1,4 @@
-import type { OnboardingStep } from '@feature/base/server';
+import type { OnboardingStep } from '@feature/onboarding';
 import StepItem from './StepItem';
 
 interface Props {

@@ -1,23 +1,64 @@
 import type { NextAuthConfig } from 'next-auth';
+import type { GitHubProfile } from "next-auth/providers/github";
+import { REFRESH_THRESHOLD_MS } from '../constants';
+import { registerUser } from "@feature/onboarding/server";
+import { refreshBackendToken } from '../utils';
 
 type Callbacks = NonNullable<NextAuthConfig['callbacks']>;
 
-export const jwt: Callbacks['jwt'] = async ({ token, user }) => {
-  if (user) {
-    token.role = user.role;
-    token.jwtToken = user.jwtToken;
-    token.refreshToken = user.refreshToken;
-    token.expiration = user.expiration;
+export const jwt: Callbacks['jwt'] = async ({ token, account, profile }) => {
+  if (account?.provider === 'github' && profile) {
+    const gh = profile as unknown as GitHubProfile;
+    token.githubId = String(gh.id);
+    token.githubLogin = gh.login;
+    token.githubAccessToken = account.access_token;
+
+    if (!token.onboardingRequestId) {
+      try {
+        const result = await registerUser({
+          githubUserId: token.githubId,
+          githubLogin: token.githubLogin,
+          primaryEmail: gh.email ?? undefined,
+          displayName: gh.name ?? gh.login,
+          avatarUrl: gh.avatar_url,
+        });
+        if (result.success && result.data) {
+          token.onboardingRequestId = result.data.onboardingRequestId;
+          token.correlationId = result.data.correlationId;
+        } else {
+          token.registrationError = true;
+        }
+      } catch {
+        token.registrationError = true;
+      }
+    }
+
+    // Issue backend JWT immediately after GitHub OAuth completes
+    await refreshBackendToken(token);
+    return token;
   }
+
+  // On subsequent session reads, proactively refresh before expiry
+  if (
+    token.githubAccessToken &&
+    token.backendTokenExpiresAt &&
+    Date.now() > token.backendTokenExpiresAt - REFRESH_THRESHOLD_MS
+  ) {
+    await refreshBackendToken(token);
+  }
+
   return token;
 };
 
 export const session: Callbacks['session'] = async ({ session, token }) => {
-  if (token && session.user) {
-    session.user.id = token.sub as string;
-    session.user.role = token.role as string;
-    session.user.jwtToken = token.jwtToken as string;
-    session.user.refreshToken = token.refreshToken as string;
+  if (session.user) {
+    session.user.githubId = token.githubId;
+    session.user.githubLogin = token.githubLogin;
+    session.user.githubAccessToken = token.githubAccessToken;
+    session.user.onboardingRequestId = token.onboardingRequestId;
+    session.user.correlationId = token.correlationId;
+    session.user.registrationError = token.registrationError;
+    session.user.backendToken = token.backendToken;
   }
   return session;
 };
