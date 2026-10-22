@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 frontend/          Nx monorepo (pnpm) — Next.js app + auth feature library
 backend/          Spring Boot microservices (Maven multi-module)
-infra/docker/      Local Postgres/Kafka/Grafana config mounted into docker-compose.yml (compose file lives at repo root)
+infra/<tool>/      Local Postgres/Kafka/Prometheus/Promtail/Grafana config mounted into docker-compose.yml (compose file lives at repo root)
 infra/terraform/   GCP infrastructure modules (Cloud Run, Cloud SQL, Secret Manager, IAM) — scaffolded, validated, not yet applied
 scripts/           Build/deploy automation (Makefile targets) and cross-platform CLI install scripts
 docs/              Authoritative specs — treat as source of truth
@@ -65,9 +65,14 @@ Backend integration tests use **TestContainers** — Docker must be running loca
 ## Local infrastructure
 
 ```bash
-# Start Postgres + Kafka + Schema Registry + Consul (compose file lives at repo root;
-# infra/docker/ holds mounted config for Postgres init scripts, Kafka, Prometheus, Grafana)
+# Start core: Postgres + Kafka + Schema Registry + Consul + services (compose file lives at repo root;
+# infra/<tool>/ holds mounted config for Postgres init scripts, Kafka, Prometheus, Promtail, Grafana)
 docker compose up -d
+
+# Opt-in observability stack (Zipkin/Prometheus/Loki/Promtail/Grafana) — also enables the
+# Spring `observability` profile in the app containers. Or set COMPOSE_PROFILES in .env.
+# Use the env var, not `--profile`, so the Spring profile follows. See docs/observability-plan.md.
+COMPOSE_PROFILES=observability docker compose up -d
 
 # Stop
 docker compose down
@@ -83,9 +88,13 @@ cp .env.example .env
 | Kafka (KRaft)   | 9092 | Confluent CP 8.2.0                                                            |
 | Schema Registry | 9090 | Backward compatibility enforced                                               |
 | Consul          | 8500 | Service discovery; api-gateway routes via Consul                              |
-| Zipkin          | 9411 | Distributed trace collector and UI                                            |
-| Prometheus      | 9093 | Metrics scraper; scrapes `/actuator/prometheus` on all 4 services             |
-| Grafana         | 3001 | Dashboards; Prometheus datasource pre-wired; default login admin/admin        |
+| Zipkin          | 9411 | Trace collector and UI (`observability` profile only)                         |
+| Prometheus      | 9093 | Scrapes `/actuator/prometheus` on all 4 services (`observability` only)       |
+| Grafana         | 3001 | Dashboards, admin/admin (`observability` only); Loki on 3100                  |
+
+Zipkin export and the Prometheus registry/endpoint are off in every Spring profile by
+default (Cloud Run uses GCP-native logging/monitoring); `application-observability.yaml`
+turns them on — locally run with `SPRING_PROFILES_ACTIVE=local,observability`.
 
 Each Spring Boot service connects to its own database. Services register with Consul on startup; the api-gateway resolves routes dynamically from Consul discovery.
 
@@ -192,6 +201,7 @@ These patterns are used consistently across all backend services — follow them
 | `docs/schemas/kafka-event-schema.md` | Avro schemas, topic names, compatibility rules |
 | `docs/roadmap.md` | Phased delivery plan; each phase has explicit exit criteria |
 | `docs/build-and-deploy.md` | Makefile targets, image build/push, and Cloud Run deploy scripts |
+| `docs/observability-plan.md` | Opt-in local observability stack and the `observability` Spring profile |
 
 ## Delivery phase status
 
