@@ -77,9 +77,6 @@ importers:
       server-only:
         specifier: ^0.0.1
         version: 0.0.1
-      shadcn:
-        specifier: ^4.22.1
-        version: 4.22.1(babel-plugin-macros@3.1.0)
       sonner:
         specifier: 2.0.3
         version: 2.0.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -228,6 +225,9 @@ importers:
       prettier:
         specifier: ~3.6.2
         version: 3.6.2
+      shadcn:
+        specifier: ^4.22.1
+        version: 4.22.1(babel-plugin-macros@3.1.0)
       ts-jest:
         specifier: ^29.4.0
         version: 29.4.11(@babel/core@7.29.0)(@jest/transform@30.4.1)(@jest/types@30.4.1)(babel-jest@30.4.1(@babel/core@7.29.0))(jest-util@30.4.1)(jest@30.4.2(@types/node@20.19.9)(babel-plugin-macros@3.1.0)(ts-node@10.9.1(@swc/core@1.5.29(@swc/helpers@0.5.15))(@types/node@20.19.9)(typescript@5.9.3)))(typescript@5.9.3)

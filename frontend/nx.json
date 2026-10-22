@@ -70,7 +70,7 @@
       },
       "action": {
         "projectName": "onboarding",
-        "type": "api"
+        "actionType": "api"
       }
     },
     "@nx/react": {
