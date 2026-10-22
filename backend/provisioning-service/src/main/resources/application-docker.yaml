@@ -1,6 +1,15 @@
 spring:
+  datasource:
+    url: jdbc:postgresql://${DATABASE_HOST:postgres}:${DATABASE_PORT:5432}/${DATABASE_NAME:provisioning_service}
   kafka:
-    bootstrap-servers: ${BOOTSTRAP_SERVERS:kafka:9092}
+    bootstrap-servers: ${BOOTSTRAP_SERVERS:kafka-1:9090}
+    properties:
+      schema-registry-url: ${SCHEMA_REGISTRY_URL:http://schema-registry:8081}
+  jpa:
+    properties:
+      hibernate:
+        format_sql: false
+        show_sql: false
 server:
   port: 8080
 logging:
