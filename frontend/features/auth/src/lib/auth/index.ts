@@ -1,24 +1,17 @@
-import NextAuth from 'next-auth';
-import Github from 'next-auth/providers/github';
-import { GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET } from '../config/env';
+import NextAuth, { NextAuthResult } from 'next-auth';
+import GitHub from 'next-auth/providers/github';
 import { authConfig } from './auth.config';
-import { jwtCallback, sessionCallback } from './callbacks';
 
-export const { auth, handlers, signIn, signOut } = NextAuth({
+const nextAuth: NextAuthResult = NextAuth({
   ...authConfig,
   providers: [
-    Github({
-      clientId: GITHUB_CLIENT_ID || '',
-      clientSecret: GITHUB_CLIENT_SECRET || '',
-    }),
+    // Zero-config OAuth providers — reads AUTH_<PROVIDER>_ID / AUTH_<PROVIDER>_SECRET
+    // from the environment. Remove any providers you don't need.
+    GitHub
   ],
-  callbacks: {
-    jwt: jwtCallback,
-    session: sessionCallback,
-    async redirect({ url, baseUrl }) {
-      if (url.startsWith('/')) return `${baseUrl}${url}`;
-      else if (new URL(url).origin === baseUrl) return url;
-      return baseUrl;
-    },
-  },
 });
+
+export const auth: NextAuthResult['auth'] = nextAuth.auth;
+export const handlers: NextAuthResult['handlers'] = nextAuth.handlers;
+export const signIn: NextAuthResult['signIn'] = nextAuth.signIn;
+export const signOut: NextAuthResult['signOut'] = nextAuth.signOut;

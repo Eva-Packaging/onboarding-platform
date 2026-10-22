@@ -4,8 +4,7 @@
     "outDir": "../../dist/out-tsc",
     "module": "commonjs",
     "moduleResolution": "node10",
-    "jsx": "react-jsx",
-    "types": ["jest", "node"]
+    "jsx": "react-jsx","types": ["jest", "node"]
   },
   "include": [
     "jest.config.ts",

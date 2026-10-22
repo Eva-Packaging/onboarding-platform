@@ -1,21 +1,28 @@
 {
   "$schema": "https://ui.shadcn.com/schema.json",
-  "style": "new-york",
+  "style": "radix-sera",
   "rsc": true,
   "tsx": true,
   "tailwind": {
     "config": "",
-    "css": "'app/globals.css",
-    "baseColor": "neutral",
+    "css": "app/global.css",
+    "baseColor": "mist",
     "cssVariables": true,
     "prefix": ""
   },
+  "iconLibrary": "remixicon",
+  "rtl": false,
   "aliases": {
-    "components": "@app/web/components",
-    "utils": "@feature/ui/lib/utils",
-    "ui": "@feature/ui/components",
-    "lib": "@app/web/lib",
-    "hooks": "@app/web/hooks"
+    "components": "@app/web/components/ui",
+    "utils": "@app/web/lib/ui/utils",
+    "ui": "@app/web/components/ui/common",
+    "lib": "@app/web/lib/ui",
+    "hooks": "@app/web/hooks/ui"
   },
-  "iconLibrary": "lucide"
+  "menuColor": "inverted",
+  "menuAccent": "subtle",
+  "registries": {
+    "@animate-ui": "https://animate-ui.com/r/{name}.json",
+    "@cult-ui": "https://cult-ui.com/r/{name}.json"
+  }
 }

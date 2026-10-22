@@ -1,12 +1,13 @@
-import { redirect } from 'next/navigation';
+import React from 'react';
 
 interface Props {
-  params: Promise<{}>;
-  searchParams: Promise<{}>;
+  params: Promise<{ [key: string]: string | string[] | undefined }>
 }
 
-async function RootPage(props: Props) {
-  redirect("/onboarding")
+export default async function Index(props: Props) {
+  return (
+    <div>
+      Home
+    </div>
+  );
 }
-
-export default RootPage;

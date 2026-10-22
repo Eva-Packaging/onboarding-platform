@@ -1,6 +1,8 @@
-import { ApiClient, type ApiResponse, ApiError } from '@client/api-client';
-import { BACKEND_API_URL } from './env';
-const json = require('../../../package.json');
+import { ApiClient, type ApiResponse, ApiError } from '@next-feature/client';
+import { AUTH_API_URL } from './env';
+// import { logger } from '@next-feature/logging/server';
+
+// const log = logger.child({ module: 'auth-client' });
 
 /**
  * Centralized API client configuration
@@ -12,60 +14,16 @@ const json = require('../../../package.json');
  * - Authentication handling
  */
 const apiClient = new ApiClient({
-  baseURL: BACKEND_API_URL,
-  enableRefreshToken: false,
-  onUnauthorized: async () => {
-    console.log('[auth-client] Unauthorized');
-  },
-  onRefreshTokenExpired: async () => {
-    console.log('[auth-client] Refresh token expired');
-  },
+  baseURL: AUTH_API_URL,
   onAuthenticated: async (config) => {
-    try {
-      // Dynamic import breaks the circular dep: client → auth/index → callbacks → registration → client
-      const { auth } = await import('../auth/index');
-      const session = await auth();
-      const token = session?.user?.backendToken;
-      if (token) {
-        // config.headers ??= {};
-        config.headers['Authorization'] = `Bearer ${token}`;
-      }
-    } catch {
-      // Not in an authenticated server context (e.g., public endpoints)
-    }
+    // log.info(`${config.method.toUpperCase()} ${config.url} ${config.data ?? ""}`)
   },
-  onRefreshToken: async (originalRequest) => {
-    return '';
-  },
-  // timeout: 30000,
-  // maxRetries: 3,
-  // retryDelay: 1000
 });
 
-apiClient.axios.defaults.headers.common['User-Agent'] = [
-  json.name,
-  json.version,
-].join(':');
+const { name, version } = require('../../../package.json');
+
+apiClient.axios.defaults.headers.common['User-Agent'] = `${name}:${version}`;
 apiClient.axios.defaults.headers.common['Content-Type'] = 'application/json';
-
-/**
- * Example: Override request interceptor
- */
-// apiClient.interceptors.request.use((config) => {
-//   // Add custom headers, auth tokens, etc.
-//   return config;
-// });
-
-/**
- * Example: Override response interceptor
- */
-// apiClient.interceptors.response.use(
-//   (response) => response,
-//   (error) => {
-//     // Handle errors globally
-//     return Promise.reject(error);
-//   }
-// );
 
 // Re-export commonly used utilities
 export { ApiError, type ApiResponse };

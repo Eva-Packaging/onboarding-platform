@@ -1,1 +1,11 @@
+allowBuilds:
+  '@parcel/watcher': true
+  '@swc/core': true
+  esbuild: true
+  nx: true
+  sharp: true
+  unrs-resolver: true
 autoInstallPeers: true
+minimumReleaseAgeExclude:
+  - 'next-feature'
+  - '@next-feature/*'

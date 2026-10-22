@@ -59,21 +59,19 @@
       "component": {
         "projectName": "web"
       },
+      "declaration": {
+        "projectName": "onboarding"
+      },
       "feature": {
         "orgName": "feature"
       },
-      "auth": {},
-      "axios": {
-        "appProjectName": "web"
+      "application": {
+        "projectName": "web"
       },
       "action": {
-        "clientPackage": "@client/api-client"
-      },
-      "data-type": {},
-      "client": {
-        "orgName": "client"
-      },
-      "constant": {}
+        "projectName": "onboarding",
+        "type": "api"
+      }
     },
     "@nx/react": {
       "library": {
@@ -83,7 +81,8 @@
   },
   "release": {
     "version": {
-      "preVersionCommand": "pnpm dlx nx run-many -t build"
+      "preVersionCommand": "pnpm exec nx run-many -t build"
     }
-  }
+  },
+  "plugins": []
 }

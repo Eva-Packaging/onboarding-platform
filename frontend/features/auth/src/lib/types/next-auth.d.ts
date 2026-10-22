@@ -1,4 +1,5 @@
-import type { DefaultSession, DefaultUser } from 'next-auth';
+import type { DefaultSession, DefaultUser, Session, User } from 'next-auth';
+import type { DefaultJWT, JWT } from 'next-auth/jwt';
 
 declare module 'next-auth' {
   interface Session extends DefaultSession {
@@ -17,7 +18,7 @@ declare module 'next-auth' {
 }
 
 declare module 'next-auth/jwt' {
-  interface JWT {
+  interface JWT extends DefaultJWT {
     githubAccessToken?: string;
     githubLogin?: string;
     githubId?: string;
@@ -29,4 +30,4 @@ declare module 'next-auth/jwt' {
   }
 }
 
-export type { User, Session, JWT };
+export type { JWT, Session, User };

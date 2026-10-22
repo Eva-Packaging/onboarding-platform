@@ -1,22 +1,12 @@
-import type { Account, Profile, User } from 'next-auth';
-import type { JWT } from 'next-auth/jwt';
-import type { GitHubProfile } from 'next-auth/providers/github';
-import { registerUser } from '../actions/registration';
-import { exchangeToken } from '../actions/token';
-import type { Session } from '../types/next-auth';
+import type { NextAuthConfig } from 'next-auth';
+import type { GitHubProfile } from "next-auth/providers/github";
+import { REFRESH_THRESHOLD_MS } from '../constants';
+import { registerUser } from "@feature/onboarding/server";
+import { refreshBackendToken } from '../utils';
 
-const REFRESH_THRESHOLD_MS = 5 * 60 * 1000;
+type Callbacks = NonNullable<NextAuthConfig['callbacks']>;
 
-export async function jwtCallback({
-  token,
-  account,
-  profile,
-}: {
-  user: User;
-  token: JWT;
-  account: Account | null;
-  profile?: Profile;
-}): Promise<JWT> {
+export const jwt: Callbacks['jwt'] = async ({ token, account, profile }) => {
   if (account?.provider === 'github' && profile) {
     const gh = profile as unknown as GitHubProfile;
     token.githubId = String(gh.id);
@@ -58,25 +48,9 @@ export async function jwtCallback({
   }
 
   return token;
-}
+};
 
-async function refreshBackendToken(token: JWT): Promise<void> {
-  if (!token.githubAccessToken) return;
-
-  const result = await exchangeToken(token.githubAccessToken);
-  if (result.success && result.data) {
-    token.backendToken = result.data.token;
-    token.backendTokenExpiresAt = Date.now() + result.data.expiresIn * 1000;
-  }
-}
-
-export async function sessionCallback({
-  session,
-  token,
-}: {
-  session: Session;
-  token: JWT;
-}): Promise<Session> {
+export const session: Callbacks['session'] = async ({ session, token }) => {
   if (session.user) {
     session.user.githubId = token.githubId;
     session.user.githubLogin = token.githubLogin;
@@ -87,4 +61,16 @@ export async function sessionCallback({
     session.user.backendToken = token.backendToken;
   }
   return session;
-}
+};
+
+export const redirect: Callbacks['redirect'] = async ({ url, baseUrl }) => {
+  // Allows relative callback URLs
+  if (url.startsWith('/')) return `${baseUrl}${url}`;
+  // Allows callback URLs on the same origin
+  if (new URL(url).origin === baseUrl) return url;
+  return baseUrl;
+};
+
+export const authorized: Callbacks['authorized'] = ({ auth }) => {
+  return !!auth?.user;
+};

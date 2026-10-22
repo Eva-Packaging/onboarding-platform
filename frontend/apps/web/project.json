@@ -7,7 +7,9 @@
   "targets": {
     "build": {
       "executor": "@nx/next:build",
-      "outputs": ["{options.outputPath}"],
+      "outputs": [
+        "{options.outputPath}"
+      ],
       "defaultConfiguration": "production",
       "options": {
         "outputPath": "dist/apps/web"
@@ -42,9 +44,18 @@
     },
     "test": {
       "executor": "@nx/jest:jest",
-      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "outputs": [
+        "{workspaceRoot}/coverage/{projectRoot}"
+      ],
       "options": {
         "jestConfig": "apps/web/jest.config.cts"
+      }
+    },
+    "shadcn": {
+      "executor": "next-feature:shadcn",
+      "options": {
+        "action": "apply",
+        "preset": "b2h47HD7kv"
       }
     }
   }

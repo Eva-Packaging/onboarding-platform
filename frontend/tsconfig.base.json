@@ -19,16 +19,9 @@
       "@feature/auth": ["features/auth/src/index.ts"],
       "@feature/auth/server": ["features/auth/src/server.ts"],
       "@feature/auth/*": ["features/auth/src/*"],
-      "@feature/base": ["features/base/src/index.ts"],
-      "@feature/base/server": ["features/base/src/server.ts"],
-      "@feature/base/*": ["features/base/src/*"],
-      "@client/api-client": ["clients/api-client/src/index.ts"],
-      "@client/api-client/server": ["clients/api-client/src/server.ts"],
-      "@client/api-client/*": ["clients/api-client/src/*"],
-      "@feature/logging": ["features/logging/src/index.ts"],
-      "@feature/logging/server": ["features/logging/src/server.ts"],
-      "@feature/logging/config": ["features/logging/src/config.ts"],
-      "@feature/logging/*": ["features/logging/src/*"]
+      "@feature/onboarding": ["features/onboarding/src/index.ts"],
+      "@feature/onboarding/server": ["features/onboarding/src/server.ts"],
+      "@feature/onboarding/*": ["features/onboarding/src/*"]
     }
   },
   "exclude": ["node_modules", "tmp"]
