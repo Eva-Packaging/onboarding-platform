@@ -1,5 +1,5 @@
 import api from '../config/client';
-import { getOnboardingStatus } from './onboarding';
+import { getOnboardingStatus, retryOnboardingSteps } from './onboarding';
 import {
   getOnboardingStatusSchema,
   type GetOnboardingStatusResponse,
@@ -12,10 +12,11 @@ jest.mock('@next-feature/client/server', () => ({
 }));
 jest.mock('../config/client', () => ({
   __esModule: true,
-  default: { get: jest.fn() },
+  default: { get: jest.fn(), post: jest.fn() },
 }));
 
 const mockGet = api.get as jest.MockedFunction<typeof api.get>;
+const mockPost = api.post as jest.MockedFunction<typeof api.post>;
 
 const validRequestId = '4168d9ca-e6dc-4e17-8d8a-d38b5487f2dd';
 
@@ -44,6 +45,7 @@ const mockResponse: GetOnboardingStatusResponse = {
 
 beforeEach(() => {
   mockGet.mockReset();
+  mockPost.mockReset();
 });
 
 describe('getOnboardingStatusSchema', () => {
@@ -95,5 +97,34 @@ describe('getOnboardingStatus', () => {
     await expect(
       getOnboardingStatus({ requestId: validRequestId }),
     ).rejects.toThrow('Network error');
+  });
+});
+
+describe('retryOnboardingSteps', () => {
+  it('posts the steps to /api/v1/onboarding/{requestId}/retry', async () => {
+    const response = {
+      requestId: validRequestId,
+      state: 'IN_PROGRESS',
+      requeuedSteps: ['JIRA_GROUP_PROVISIONING'],
+      correlationId: mockResponse.correlationId,
+    };
+    mockPost.mockResolvedValue(response);
+
+    const result = await retryOnboardingSteps(
+      { requestId: validRequestId, steps: ['JIRA_GROUP_PROVISIONING'] },
+    );
+
+    expect(mockPost).toHaveBeenCalledWith(
+      `/api/v1/onboarding/${validRequestId}/retry`,
+      { steps: ['JIRA_GROUP_PROVISIONING'] },
+    );
+    expect(result).toEqual(response);
+  });
+
+  it('throws when no steps are given', async () => {
+    await expect(
+      retryOnboardingSteps({ requestId: validRequestId, steps: [] }),
+    ).rejects.toThrow();
+    expect(mockPost).not.toHaveBeenCalled();
   });
 });

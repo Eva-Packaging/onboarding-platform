@@ -1,4 +1,4 @@
-import api from '../config/client';
+import { unauthenticated as api } from '../config/client';
 import { exchangeToken, registerUser } from './user';
 import {
   registerUserSchema,
@@ -13,7 +13,7 @@ jest.mock('@next-feature/client/server', () => ({
 }));
 jest.mock('../config/client', () => ({
   __esModule: true,
-  default: { post: jest.fn() },
+  unauthenticated: { post: jest.fn() },
 }));
 
 const mockPost = api.post as jest.MockedFunction<typeof api.post>;

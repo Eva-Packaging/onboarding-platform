@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { withApi } from '@next-feature/client/server';
-import api from '../config/client';
+import { unauthenticated as api } from '../config/client';
 import {
   registerUserSchema,
   type RegisterUserRequest,

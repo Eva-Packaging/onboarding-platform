@@ -9,6 +9,13 @@ const { composePlugins, withNx } = require('@nx/next');
  **/
 const nextConfig = {
   serverExternalPackages: ['pino', 'pino-pretty', 'thread-stream'],
+  images: {
+    // Provider preview images shown on the onboarding steps
+    remotePatterns: [
+      { protocol: 'https', hostname: 'images.ctfassets.net' },
+      { protocol: 'https', hostname: 'dam-cdn.atl.orangelogic.com' },
+    ],
+  },
   // Use this to set Nx-specific options
   // See: https://nx.dev/recipes/next/next-config-setup
   nx: {},

@@ -33,3 +33,21 @@ export interface OnboardingStepTarget {
   targetType: string;
   externalKey: string;
 }
+
+/**
+ * [retry-onboarding-steps]
+ */
+export const retryOnboardingStepsSchema = z.object({
+  requestId: z.string().uuid(),
+  steps: z.array(z.string().min(1)).min(1),
+  reason: z.string().optional(),
+});
+export type RetryOnboardingStepsRequest = z.infer<
+  typeof retryOnboardingStepsSchema
+>;
+export type RetryOnboardingStepsResponse = {
+  requestId: string;
+  state: string;
+  requeuedSteps: string[];
+  correlationId: string;
+};

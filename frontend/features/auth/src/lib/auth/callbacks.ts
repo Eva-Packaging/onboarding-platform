@@ -1,8 +1,8 @@
 import type { NextAuthConfig } from 'next-auth';
 import type { GitHubProfile } from "next-auth/providers/github";
 import { REFRESH_THRESHOLD_MS } from '../constants';
-import { registerUser } from "@feature/onboarding/server";
-import { refreshBackendToken } from '../utils';
+import { exchangeToken, registerUser } from "@feature/onboarding/server";
+import type { JWT } from "next-auth/jwt";
 
 type Callbacks = NonNullable<NextAuthConfig['callbacks']>;
 
@@ -32,9 +32,8 @@ export const jwt: Callbacks['jwt'] = async ({ token, account, profile }) => {
         token.registrationError = true;
       }
     }
-
     // Issue backend JWT immediately after GitHub OAuth completes
-    await refreshBackendToken(token);
+    token = await refreshBackendToken(token);
     return token;
   }
 
@@ -44,11 +43,20 @@ export const jwt: Callbacks['jwt'] = async ({ token, account, profile }) => {
     token.backendTokenExpiresAt &&
     Date.now() > token.backendTokenExpiresAt - REFRESH_THRESHOLD_MS
   ) {
-    await refreshBackendToken(token);
+    token = await refreshBackendToken(token);
   }
-
   return token;
 };
+async function refreshBackendToken(token: JWT): Promise<JWT> {
+  if (!token.githubAccessToken) return;
+
+  const result = await exchangeToken(token.githubAccessToken);
+  if (result.success && result.data) {
+    token.backendToken = result.data.token;
+    token.backendTokenExpiresAt = Date.now() + result.data.expiresIn * 1000;
+  }
+  return token;
+}
 
 export const session: Callbacks['session'] = async ({ session, token }) => {
   if (session.user) {

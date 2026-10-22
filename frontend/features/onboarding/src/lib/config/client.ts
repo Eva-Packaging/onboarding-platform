@@ -2,9 +2,9 @@ import 'server-only';
 
 import { ApiClient, type ApiResponse, ApiError } from '@next-feature/client';
 import { ONBOARDING_API_URL } from './env';
-// import { logger } from '@next-feature/logging/server';
+import { logger } from '@next-feature/logging/server';
 
-// const log = logger.child({ module: 'onboarding-client' });
+const log = logger.child({ module: 'onboarding-client' });
 
 /**
  * Centralized API client configuration
@@ -18,7 +18,24 @@ import { ONBOARDING_API_URL } from './env';
 const apiClient = new ApiClient({
   baseURL: ONBOARDING_API_URL,
   onAuthenticated: async (config) => {
-    // log.info(`${config.method.toUpperCase()} ${config.url} ${config.data ?? ""}`)
+    log.info(`${config.method?.toUpperCase()} ${config.url} ${config.data ?? ""}`)
+    try {
+      const { auth } = await import("@feature/auth/server");
+      const session = await auth();
+      const token = session?.user?.backendToken;
+      if (token) {
+        config.headers["Authorization"] = `Bearer ${token}`;
+      }
+    } catch(e) {
+      // ignore for now
+    }
+  },
+});
+
+export const unauthenticated = new ApiClient({
+  baseURL: ONBOARDING_API_URL,
+  onAuthenticated: async (config) => {
+    log.info(`${config.method?.toUpperCase()} ${config.url} ${config.data ?? ""}`)
   },
 });
 
