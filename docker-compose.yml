@@ -8,7 +8,9 @@ services:
     ports:
       - "8080:8080"
     environment:
-      SPRING_PROFILES_ACTIVE: docker
+      # COMPOSE_PROFILES=observability also enables the Spring `observability` profile
+      SPRING_PROFILES_ACTIVE: docker${COMPOSE_PROFILES:+,observability}
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
       JWT_SECRET: ${JWT_SECRET}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:4200}
     depends_on:
@@ -24,7 +26,9 @@ services:
       context: ./backend
       dockerfile: user-service/Dockerfile
     environment:
-      SPRING_PROFILES_ACTIVE: docker
+      # COMPOSE_PROFILES=observability also enables the Spring `observability` profile
+      SPRING_PROFILES_ACTIVE: docker${COMPOSE_PROFILES:+,observability}
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
       JWT_SECRET: ${JWT_SECRET}
       JWT_SECURITY_PUBLIC_PATHS: "/**"
     depends_on:
@@ -44,7 +48,9 @@ services:
       context: ./backend
       dockerfile: onboarding-service/Dockerfile
     environment:
-      SPRING_PROFILES_ACTIVE: docker
+      # COMPOSE_PROFILES=observability also enables the Spring `observability` profile
+      SPRING_PROFILES_ACTIVE: docker${COMPOSE_PROFILES:+,observability}
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
       JWT_SECRET: ${JWT_SECRET}
       JWT_SECURITY_PUBLIC_PATHS: "/**"
     depends_on:
@@ -64,7 +70,9 @@ services:
       context: ./backend
       dockerfile: provisioning-service/Dockerfile
     environment:
-      SPRING_PROFILES_ACTIVE: docker
+      # COMPOSE_PROFILES=observability also enables the Spring `observability` profile
+      SPRING_PROFILES_ACTIVE: docker${COMPOSE_PROFILES:+,observability}
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
       JWT_SECRET: ${JWT_SECRET}
       JWT_SECURITY_PUBLIC_PATHS: "/**"
       GITHUB_API_TOKEN: ${GITHUB_API_TOKEN}
@@ -184,7 +192,9 @@ services:
 #      - postgres
 #    restart: unless-stopped
 
+  # Observability stack — opt-in: COMPOSE_PROFILES=observability docker compose up -d
   zipkin:
+    profiles: [observability]
     image: openzipkin/zipkin:3
     hostname: zipkin
     ports:
@@ -194,6 +204,7 @@ services:
     restart: unless-stopped
 
   prometheus:
+    profiles: [observability]
     image: prom/prometheus:v3.4.0
     hostname: prometheus
     ports:
@@ -211,6 +222,7 @@ services:
     restart: unless-stopped
 
   loki:
+    profiles: [observability]
     image: grafana/loki:3.5.0
     hostname: loki
     ports:
@@ -221,6 +233,7 @@ services:
     restart: unless-stopped
 
   promtail:
+    profiles: [observability]
     image: grafana/promtail:3.5.0
     hostname: promtail
     volumes:
@@ -236,6 +249,7 @@ services:
     restart: unless-stopped
 
   grafana:
+    profiles: [observability]
     image: grafana/grafana:12.0.1
     hostname: grafana
     ports:

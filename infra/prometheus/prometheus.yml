@@ -13,20 +13,20 @@ scrape_configs:
   - job_name: user-service
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['users:8080']
+      - targets: ['user-service:8080']
         labels:
           service: user-service
 
   - job_name: onboarding-service
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['onboarding:8080']
+      - targets: ['onboarding-service:8080']
         labels:
           service: onboarding-service
 
   - job_name: provisioning-service
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['provisioning:8080']
+      - targets: ['provisioning-service:8080']
         labels:
           service: provisioning-service

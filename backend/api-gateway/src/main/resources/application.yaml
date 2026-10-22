@@ -101,12 +101,10 @@ management:
     health:
       probes:
         enabled: true
-    prometheus:
-      enabled: true
   endpoints:
     web:
       exposure:
-        include: health,prometheus
+        include: health
   health:
     liveness-state:
       enabled: true
@@ -115,9 +113,15 @@ management:
   tracing:
     sampling:
       probability: 1.0
+  # Export to the local Zipkin/Prometheus stack is opt-in via the `observability` profile
   zipkin:
     tracing:
-      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
+      export:
+        enabled: false
+  prometheus:
+    metrics:
+      export:
+        enabled: false
 springdoc:
   swagger-ui:
     disable-swagger-default-url: true

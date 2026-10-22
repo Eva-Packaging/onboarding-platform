@@ -1,0 +1,14 @@
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  zipkin:
+    tracing:
+      export:
+        enabled: true
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
