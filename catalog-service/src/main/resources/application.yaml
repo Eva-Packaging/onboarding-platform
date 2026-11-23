@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: catalog-service
+spring:
+  application:
+    name: catalog-service
+  datasource:
+    url: jdbc:h2:mem:catalogdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: none
